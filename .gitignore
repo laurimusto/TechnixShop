@@ -1,0 +1,52 @@
+# IntelliJ IDEA
+
+.idea/
+*.iml
+*.iws
+
+# OS files
+
+.DS_Store
+Thumbs.db
+
+# Logs
+
+*.log
+
+# Build directories
+
+target/
+build/
+out/
+
+# Maven
+
+dependency-reduced-pom.xml
+
+# Gradle
+
+.gradle/
+build/
+
+# Environment files
+
+.env
+
+# Compiled files
+
+*.class
+
+# Package files
+
+*.jar
+*.war
+*.ear
+
+# IntelliJ caches
+
+*.cache
+*.tmp
+
+# VS Code (in case mixed usage)
+
+.vscode/
