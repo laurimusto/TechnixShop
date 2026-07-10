@@ -1,8 +1,8 @@
-package service;
+package com.service;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-import repository.UserRepository;
+import com.repository.UserRepository;
 
 @Service
 public class AuthService {

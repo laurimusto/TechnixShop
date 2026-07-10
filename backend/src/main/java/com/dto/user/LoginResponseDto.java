@@ -1,4 +1,4 @@
-package dto.user;
+package com.dto.user;
 
 public record LoginResponseDto() {
 }
