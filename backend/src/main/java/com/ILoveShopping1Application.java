@@ -10,7 +10,7 @@ import java.util.TimeZone;
 public class ILoveShopping1Application {
 
     public static void main(String[] args) {
-        System.getProperty("DB_URL");
+
         // ensure the JVM default timezone is UTC so date/time handling is consistent
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
         Dotenv dotenv = Dotenv.configure()

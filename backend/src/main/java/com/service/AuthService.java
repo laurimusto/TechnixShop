@@ -13,4 +13,8 @@ public class AuthService {
         this.userRepository = userRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
     }
+
+    public UserResponseDTO createUser(UserRequestDTO request) {
+
+    }
 }
