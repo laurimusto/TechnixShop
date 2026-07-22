@@ -48,7 +48,7 @@ public class AuthService {
     }
 
     public String generateToken(User user) {
-    User user = new User;
+return "asd";
     }
 
 }
