@@ -1,6 +1,7 @@
 package com.controller;
 
 
+import com.dto.user.LoginRequestDTO;
 import com.dto.user.LoginResponseDTO;
 import com.dto.user.RegisterRequestDTO;
 import com.service.AuthService;
@@ -10,8 +11,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
-@Controller
+@RestController
 public class AuthController {
 
     private final AuthService authService;
@@ -25,4 +27,11 @@ public class AuthController {
     public LoginResponseDTO register(@RequestBody @Valid RegisterRequestDTO registerRequestDTO) {
         return authService.createUser(registerRequestDTO);
     }
+
+    @ResponseStatus(HttpStatus.OK)
+    @PostMapping("/login")
+    public LoginResponseDTO login(@RequestBody @Valid LoginRequestDTO loginRequestDTO) {
+        return authService.login(loginRequestDTO.email(), loginRequestDTO.password());
+    }
+
 }
