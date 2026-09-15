@@ -1,13 +1,12 @@
 package com.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -24,12 +23,21 @@ public class Product {
 
     private int productQuantity;
 
-    private String productCategory;
+    @ManyToOne
+    @JoinColumn(name = "category_id", nullable = false) //not nullable, e.g. "Electronics" won't have a parent.
+    private Category productCategory;
 
-    private int productPrice;
+    @ManyToOne
+    @JoinColumn(name = "brand_id", nullable = false)
+    private Brand productBrand;
 
-    private String productBrand;
+    private BigDecimal productPrice;
+
+
 
     private String productImageUrl = "image-url-here";
+
+    private String description;
+
 
 }
