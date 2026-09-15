@@ -7,5 +7,18 @@ import jakarta.persistence.Id;
 public class Product {
 
     @Id
-    private Long id;
+    private Long productId;
+
+    private String productName;
+
+    private int productQuantity;
+
+    private String productCategory;
+
+    private int productPrice;
+
+    private String productBrand;
+
+    private String productImageUrl = "image-url-here";
+
 }

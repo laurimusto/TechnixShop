@@ -1,6 +1,5 @@
 package com.service;
 
-import com.dto.user.LoginRequestDTO;
 import com.dto.user.LoginResponseDTO;
 import com.dto.user.RegisterRequestDTO;
 import com.entity.User;
@@ -61,7 +60,7 @@ public class AuthService {
         User savedUser = userRepository.save(user);
         String token = generateToken(savedUser);
 
-        return new LoginResponseDTO(token, savedUser.getEmail(), savedUser.getId());
+        return new LoginResponseDTO(token, savedUser.getEmail(), savedUser.getUserId());
     }
 
     public LoginResponseDTO login(String email, String password) {
@@ -71,7 +70,7 @@ public class AuthService {
         User user = userRepository.findByEmail(email).orElseThrow(() -> new InvalidCredentialsException("User not found"));
 
         String token = generateToken(user);
-        return new LoginResponseDTO(token, user.getEmail(), user.getId());
+        return new LoginResponseDTO(token, user.getEmail(), user.getUserId());
     }
 
     public String generateToken(User user) {
@@ -81,7 +80,7 @@ public class AuthService {
         Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
         SecretKey secretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes());
         return Jwts.builder()
-                .setSubject(String.valueOf(user.getId()))
+                .setSubject(String.valueOf(user.getUserId()))
                 .claim("role", user.getRole())
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
