@@ -22,7 +22,7 @@ public class Customer {
 
     private String customerFirstName;
 
-    private String getCustomerLastName;
+    private String CustomerLastName;
 
     private String street;
 
