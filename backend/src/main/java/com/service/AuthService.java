@@ -3,11 +3,14 @@ package com.service;
 import com.dto.user.LoginResponseDTO;
 import com.dto.user.RegisterRequestDTO;
 
+import com.entity.RefreshToken;
 import com.entity.User;
 import com.exception.EmailAlreadyExistsException;
 import com.exception.InvalidCredentialsException;
 import com.exception.PasswordMismatchException;
 import com.exception.PasswordTooShortException;
+import com.exception.TokenGenerationException;
+import com.repository.RefreshTokenRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
@@ -17,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.repository.UserRepository;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +30,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Optional;
+import java.util.UUID;
 
 import static com.enums.Role.USER;
 
@@ -33,6 +38,7 @@ import static com.enums.Role.USER;
 public class AuthService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -40,9 +46,13 @@ public class AuthService {
     @Value("${jwt.expiration}")
     private Long jwtExpirationMs;
 
-    public AuthService(UserRepository userRepository, BCryptPasswordEncoder bCryptPasswordEncoder) {
+    @Value("${refresh.expiration}")
+    private Long refreshExpirationMs;
+
+    public AuthService(UserRepository userRepository, BCryptPasswordEncoder bCryptPasswordEncoder, RefreshTokenRepository refreshTokenRepository) {
         this.userRepository = userRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     public LoginResponseDTO createUser(RegisterRequestDTO request) {
@@ -65,8 +75,9 @@ public class AuthService {
         user.setPassword(hashedPassword);
         User savedUser = userRepository.save(user);
         String token = generateToken(savedUser);
+        String refreshToken = createRefreshToken(user, UUID.randomUUID());
 
-        return new LoginResponseDTO(token, savedUser.getEmail(), savedUser.getUserId());
+        return new LoginResponseDTO(token, refreshToken, savedUser.getEmail(), savedUser.getUserId());
     }
 
     public LoginResponseDTO login(String email, String password) {
@@ -76,7 +87,8 @@ public class AuthService {
         User user = userRepository.findByEmail(email).orElseThrow(() -> new InvalidCredentialsException("User not found"));
 
         String token = generateToken(user);
-        return new LoginResponseDTO(token, user.getEmail(), user.getUserId());
+        String refreshToken = createRefreshToken(user, UUID.randomUUID());
+        return new LoginResponseDTO(token, refreshToken, user.getEmail(), user.getUserId());
     }
 
     public String generateToken(User user) {
@@ -112,27 +124,59 @@ public class AuthService {
                 System.out.println("Successfully logged in with email: " + email);
                 return true;
             } else {
-                throw new InvalidCredentialsException("Invalid password");
+                return false;
             }
         } else {
-            throw new InvalidCredentialsException("Invalid password");
+            return false;
         }
     }
 
-    public String createRefreshToken(User user) throws NoSuchAlgorithmException {
+    public String createRefreshToken(User user, UUID familyId) {
+
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + refreshExpirationMs);
+
+
         SecureRandom secureRandom = new SecureRandom(); //generate raw, random token string.
         byte[] randomBytes = new byte[64];
         secureRandom.nextBytes(randomBytes);
         String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
 
-        //hash that raw string deterministically. Same input always produces same output which lets you look up refreshtoken later.
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] hashBytes = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
-        String tokenHash = Base64.getEncoder().encodeToString(hashBytes);
+        //hash that raw string deterministically. The same input always produces the same output, which lets you look up refreshtoken later.
+        String tokenHash = hashToken(rawToken);
+
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setTokenHash(tokenHash);
+        refreshToken.setFamilyId(familyId);
+        refreshToken.setUser(user);
+        refreshToken.setExpiryDate(expiryDate);
+        refreshTokenRepository.save(refreshToken);
+
+        return rawToken;
+
+    }
+
+    @Transactional
+    public LoginResponseDTO refresh(String rawRefreshToken) {
+
+
+        String hashRefreshToken = hashToken(rawRefreshToken);
+        Optional<RefreshToken> refreshToken = refreshTokenRepository.findByTokenHash(hashRefreshToken);
+    }
+
+
+    private String hashToken(String rawToken) {
+        String tokenHash;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            tokenHash = Base64.getEncoder().encodeToString(hashBytes);
+        } catch (NoSuchAlgorithmException e) {
+            throw new TokenGenerationException("Failed to hash refresh token", e);
+        }
 
         return tokenHash;
 
     }
-
 }
 
