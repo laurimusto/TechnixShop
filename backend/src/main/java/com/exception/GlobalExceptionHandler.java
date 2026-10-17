@@ -48,6 +48,12 @@ public class GlobalExceptionHandler {
         return createErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    @ExceptionHandler(InvalidEmailException.class)
+    public ResponseEntity<ErrorResponseDTO> handleInvalidEmail(InvalidEmailException ex) {
+        log.info("Invalid email: {}", ex.getMessage());
+        return createErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponseDTO> handleValidation(MethodArgumentNotValidException ex) {
         String errorMessage = ex.getBindingResult()
@@ -102,5 +108,12 @@ public class GlobalExceptionHandler {
         log.error("Unhandled exception", ex);
         return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
                 "An unexpected error occurred. Please try again later or contact support.");
+    }
+
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ResponseEntity<ErrorResponseDTO> handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
+        log.info("Invalid refresh token: {}", ex.getMessage());
+        return createErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 }

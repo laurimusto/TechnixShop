@@ -5,17 +5,16 @@ import com.dto.user.RegisterRequestDTO;
 
 import com.entity.RefreshToken;
 import com.entity.User;
-import com.exception.EmailAlreadyExistsException;
-import com.exception.InvalidCredentialsException;
-import com.exception.PasswordMismatchException;
-import com.exception.PasswordTooShortException;
-import com.exception.TokenGenerationException;
+import com.exception.*;
 import com.repository.RefreshTokenRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.java.Log;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -36,6 +35,8 @@ import static com.enums.Role.USER;
 
 @Service
 public class AuthService {
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -66,7 +67,7 @@ public class AuthService {
             throw new PasswordTooShortException("Password must be at least 3 characters long.");
         }
         if (request.email().length() > 50) {
-            throw new PasswordTooShortException("Email can't be longer than 50 characters");
+            throw new InvalidEmailException("Email can't be longer than 50 characters");
         }
         User user = new User();
         user.setEmail(request.email());
@@ -75,16 +76,14 @@ public class AuthService {
         user.setPassword(hashedPassword);
         User savedUser = userRepository.save(user);
         String token = generateToken(savedUser);
-        String refreshToken = createRefreshToken(user, UUID.randomUUID());
+        String refreshToken = createRefreshToken(savedUser, UUID.randomUUID());
 
         return new LoginResponseDTO(token, refreshToken, savedUser.getEmail(), savedUser.getUserId());
     }
 
     public LoginResponseDTO login(String email, String password) {
-        if (!authenticate(email, password)) {
-            throw new InvalidCredentialsException("Invalid email or password");
-        }
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new InvalidCredentialsException("User not found"));
+        User user = authenticate(email, password)
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
 
         String token = generateToken(user);
         String refreshToken = createRefreshToken(user, UUID.randomUUID());
@@ -117,18 +116,13 @@ public class AuthService {
         return jws.getBody();
     }
 
-    public boolean authenticate(String email, String password) {
+    public Optional<User> authenticate(String email, String password) {
         Optional<User> user = userRepository.findByEmail(email);
-        if (user.isPresent()) {
-            if (bCryptPasswordEncoder.matches(password, user.get().getPassword())) {
-                System.out.println("Successfully logged in with email: " + email);
-                return true;
-            } else {
-                return false;
-            }
-        } else {
-            return false;
+        if (user.isPresent() && bCryptPasswordEncoder.matches(password, user.get().getPassword())) {
+            log.info("Successfully authenticated email: {}", email);
+            return user;
         }
+        return Optional.empty();
     }
 
     public String createRefreshToken(User user, UUID familyId) {
@@ -161,7 +155,22 @@ public class AuthService {
 
 
         String hashRefreshToken = hashToken(rawRefreshToken);
-        Optional<RefreshToken> refreshToken = refreshTokenRepository.findByTokenHash(hashRefreshToken);
+        RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(hashRefreshToken).orElseThrow(() -> new InvalidRefreshTokenException("Refresh token not found in database!"));
+
+        if(refreshToken.isRevoked()){ //check if its revoked
+            refreshTokenRepository.revokeAllByFamilyId(refreshToken.getFamilyId());
+            throw new InvalidRefreshTokenException("refreshToken is revoked!");
+        }
+        if(refreshToken.getExpiryDate().before(new Date())) { //check expiry date
+            throw new InvalidRefreshTokenException("refreshToken is expired!");
+        }
+
+        refreshToken.setRevoked(true);
+        refreshTokenRepository.save(refreshToken);
+        String newRefreshToken = createRefreshToken(refreshToken.getUser(), refreshToken.getFamilyId());
+        String newAccessToken = generateToken(refreshToken.getUser());
+
+        return new LoginResponseDTO(newAccessToken, newRefreshToken, refreshToken.getUser().getEmail(), refreshToken.getUser().getUserId());
     }
 
 
