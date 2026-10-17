@@ -20,25 +20,37 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long productId;
 
-    private String productName;
+    @Column(nullable = false)
+    private String name;
 
-    private int productQuantity;
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(nullable = false)
+    private BigDecimal price;
+
+    @Column(nullable = false)
+    private int stockQuantity;
 
     @ManyToOne
     @JoinColumn(name = "category_id", nullable = false) //not nullable, e.g. "Electronics" won't have a parent.
-    private Category productCategory;
+    private Category category;
 
     @ManyToOne
     @JoinColumn(name = "brand_id", nullable = false)
-    private Brand productBrand;
+    private Brand brand;
 
-    private BigDecimal productPrice;
+    private BigDecimal weightKg;
 
+    private BigDecimal lengthCm;
 
+    private BigDecimal widthCm;
 
-    private String productImageUrl = "image-url-here";
+    private BigDecimal heightCm;
 
-    private String description;
+    private BigDecimal averageRating;
 
+    @Column(nullable = false)
+    private int ratingCount = 0;
 
 }
