@@ -9,6 +9,7 @@ import java.util.Date;
 import java.util.UUID;
 
 @Entity
+@Table(name = "refresh_tokens")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,9 +18,10 @@ public class RefreshToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long tokenId;
 
+    @Column(nullable = false)
     private UUID familyId;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String tokenHash;
 
     @ManyToOne(fetch = FetchType.LAZY)
