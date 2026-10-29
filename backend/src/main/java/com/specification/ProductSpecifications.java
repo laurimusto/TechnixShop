@@ -23,6 +23,12 @@ public class ProductSpecifications {
                 criteriaBuilder.equal(root.get("brand").get("brandId"), brandId);
     }
 
+    //case-insensitive substring match on product name, for the search bar
+    public static Specification<Product> nameContains(String name) {
+        return (root, query, criteriaBuilder) ->
+                criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), "%" + name.toLowerCase() + "%");
+    }
+
     //this is for filtering prices and weight between x AND y
     public static Specification<Product> numericBetween(String fieldName, BigDecimal min, BigDecimal max) {
         return (root, query, criteriaBuilder) -> {

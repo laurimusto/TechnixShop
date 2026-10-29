@@ -1,7 +1,11 @@
 package com.service;
 
+import com.dto.product.ProductResponseDTO;
+import com.dto.product.ProductResponseMapper;
 import com.dto.product.ProductSearchCriteriaDTO;
 import com.entity.Product;
+import com.entity.ProductImage;
+import com.repository.ProductImageRepository;
 import com.repository.ProductRepository;
 import com.specification.ProductSpecifications;
 import org.springframework.data.domain.Page;
@@ -12,25 +16,32 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class ProductService {
     private final ProductRepository productRepository;
+    private final ProductImageRepository productImageRepository;
 
-    public ProductService(ProductRepository productRepository) {
+    public ProductService(ProductRepository productRepository, ProductImageRepository productImageRepository) {
         this.productRepository = productRepository;
+        this.productImageRepository = productImageRepository;
     }
 
-    public Page<Product> search(ProductSearchCriteriaDTO criteria, Pageable pageable) {
-        // null here means "filter not requested". Specification.where(null) tolerates null (matches
-        // everything), but .and(other) does NOT - it throws if other is null, so each .and() below
-        // is guarded instead of chained unconditionally.
+    public Page<ProductResponseDTO> search(ProductSearchCriteriaDTO criteria, Pageable pageable) {
+        // null here means "filter not requested". Neither Specification.where(null) nor .and(null)
+        // actually tolerate null in this Spring Data JPA version (confirmed the hard way - .where(null)
+        // throws "Specification must not be null" too), so spec always starts as a real, non-null
+        // "always true" Specification, and every .and() call below is guarded.
+        Specification<Product> nameFilter = criteria.name() != null && !criteria.name().isBlank() ? ProductSpecifications.nameContains(criteria.name()) : null;
         Specification<Product> categoryFilter = criteria.categoryId() != null ? ProductSpecifications.hasCategory(criteria.categoryId()) : null;
         Specification<Product> brandFilter = criteria.brandId() != null ? ProductSpecifications.hasBrand(criteria.brandId()) : null;
         // OR (not AND): a caller may supply only one bound, e.g. "price >= 500" with no upper limit.
         Specification<Product> priceFilter = criteria.maxPrice() != null || criteria.minPrice() != null ? ProductSpecifications.numericBetween("price", criteria.minPrice(), criteria.maxPrice()) : null;
 
-        Specification<Product> spec = Specification.where(categoryFilter);
+        Specification<Product> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+        if (nameFilter != null) spec = spec.and(nameFilter);
+        if (categoryFilter != null) spec = spec.and(categoryFilter);
         if (brandFilter != null) spec = spec.and(brandFilter);
         if (priceFilter != null) spec = spec.and(priceFilter);
 
@@ -48,6 +59,13 @@ public class ProductService {
 
             }
         }
-        return productRepository.findAll(spec, pageable);
+        Page<Product> products = productRepository.findAll(spec, pageable);
+
+        List<Long> productIds = products.map(Product::getProductId).toList();
+        // one batch query for the whole page instead of one query per product
+        Map<Long, String> imageUrlByProductId = productImageRepository.findByProduct_ProductIdInOrderByDisplayOrderAsc(productIds).stream()
+                .collect(Collectors.toMap(image -> image.getProduct().getProductId(), ProductImage::getUrl, (first, second) -> first));
+
+        return products.map(product -> ProductResponseMapper.from(product, imageUrlByProductId.get(product.getProductId())));
     }
 }

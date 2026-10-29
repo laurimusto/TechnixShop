@@ -1,9 +1,7 @@
 package com.controller;
 
 import com.dto.product.ProductResponseDTO;
-import com.dto.product.ProductResponseMapper;
 import com.dto.product.ProductSearchCriteriaDTO;
-import com.entity.Product;
 import com.service.ProductService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,6 +24,7 @@ public class ProductController {
 
     @GetMapping("/search")
     public Page<ProductResponseDTO> search(
+            @RequestParam(required = false) String name,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) BigDecimal minPrice,
@@ -43,8 +42,7 @@ public class ProductController {
         if (ramGb != null) numberSpecFilters.put("ram_gb", ramGb);
         if (displaySizeIn != null) numberSpecFilters.put("display_size_in", displaySizeIn);
 
-        ProductSearchCriteriaDTO criteria = new ProductSearchCriteriaDTO(categoryId, brandId, minPrice, maxPrice, textSpecFilters, numberSpecFilters);
-        Page<Product> products = productService.search(criteria, pageable);
-        return products.map(ProductResponseMapper::from);
+        ProductSearchCriteriaDTO criteria = new ProductSearchCriteriaDTO(name, categoryId, brandId, minPrice, maxPrice, textSpecFilters, numberSpecFilters);
+        return productService.search(criteria, pageable);
     }
 }

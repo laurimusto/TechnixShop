@@ -52,6 +52,7 @@ build/
 .vscode/
 node_modules/
 .next/
+*.tsbuildinfo
 CLAUDE.md
 AGENTS.md
 docs/

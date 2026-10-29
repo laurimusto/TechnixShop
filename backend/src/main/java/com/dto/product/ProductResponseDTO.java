@@ -10,6 +10,7 @@ public record ProductResponseDTO(
         int stockQuantity,
         String categoryName,
         String brandName,
+        String imageUrl,
         BigDecimal weightKg,
         BigDecimal averageRating,
         int ratingCount

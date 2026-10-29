@@ -4,7 +4,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
-public record ProductSearchCriteriaDTO(Long categoryId,
+public record ProductSearchCriteriaDTO(String name, //search bar substring match against product name
+                                       Long categoryId,
                                        Long brandId,
                                        BigDecimal minPrice,
                                        BigDecimal maxPrice,
