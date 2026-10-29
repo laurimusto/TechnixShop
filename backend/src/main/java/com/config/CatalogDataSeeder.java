@@ -14,6 +14,7 @@ import com.repository.ProductSpecValueRepository;
 import com.repository.SpecRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -98,6 +99,7 @@ public class CatalogDataSeeder implements CommandLineRunner {
     );
 
     @Override
+    @Transactional
     public void run(String... args) {
         if (productRepository.count() > 0) {
             return;

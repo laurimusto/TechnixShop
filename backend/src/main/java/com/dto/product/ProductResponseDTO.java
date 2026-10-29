@@ -1,4 +1,17 @@
 package com.dto.product;
 
-public record ProductResponseDTO() {
+import java.math.BigDecimal;
+
+public record ProductResponseDTO(
+        Long productId,
+        String name,
+        String description,
+        BigDecimal price,
+        int stockQuantity,
+        String categoryName,
+        String brandName,
+        BigDecimal weightKg,
+        BigDecimal averageRating,
+        int ratingCount
+) {
 }

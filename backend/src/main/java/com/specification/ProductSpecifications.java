@@ -2,7 +2,6 @@ package com.specification;
 
 import com.entity.Product;
 import com.entity.ProductSpecValue;
-import com.entity.Spec;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;

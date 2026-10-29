@@ -22,17 +22,17 @@ public class ProductService {
     }
 
     public Page<Product> search(ProductSearchCriteriaDTO criteria, Pageable pageable) {
-        // null here means "filter not requested" - Specification.and(null) is a no-op, so absent filters don't restrict the query.
+        // null here means "filter not requested". Specification.where(null) tolerates null (matches
+        // everything), but .and(other) does NOT - it throws if other is null, so each .and() below
+        // is guarded instead of chained unconditionally.
         Specification<Product> categoryFilter = criteria.categoryId() != null ? ProductSpecifications.hasCategory(criteria.categoryId()) : null;
         Specification<Product> brandFilter = criteria.brandId() != null ? ProductSpecifications.hasBrand(criteria.brandId()) : null;
         // OR (not AND): a caller may supply only one bound, e.g. "price >= 500" with no upper limit.
         Specification<Product> priceFilter = criteria.maxPrice() != null || criteria.minPrice() != null ? ProductSpecifications.numericBetween("price", criteria.minPrice(), criteria.maxPrice()) : null;
 
-
-        Specification<Product> spec = Specification
-                .where(categoryFilter)
-                .and(brandFilter)
-                .and(priceFilter);
+        Specification<Product> spec = Specification.where(categoryFilter);
+        if (brandFilter != null) spec = spec.and(brandFilter);
+        if (priceFilter != null) spec = spec.and(priceFilter);
 
         // Text and number specs are reassigned in loop because the number of entries is unknown ahead of time.
         if (criteria.textSpecFilters() != null) {
@@ -49,7 +49,5 @@ public class ProductService {
             }
         }
         return productRepository.findAll(spec, pageable);
-
-
     }
 }
