@@ -26,8 +26,17 @@ public class ProductSpecifications {
 
     //this is for filtering prices and weight between x AND y
     public static Specification<Product> numericBetween(String fieldName, BigDecimal min, BigDecimal max) {
-        return (root, query, criteriaBuilder) ->
-                criteriaBuilder.between(root.get(fieldName), min, max);
+        return (root, query, criteriaBuilder) -> {
+            if(min != null && max != null) {
+                return criteriaBuilder.between(root.get(fieldName), min, max);
+            } else if ( min != null) {
+                return criteriaBuilder.greaterThanOrEqualTo(root.get(fieldName), min);
+            } else if (max != null) {
+                return criteriaBuilder.lessThanOrEqualTo(root.get(fieldName), max);
+            } else {
+                return criteriaBuilder.conjunction();
+            }
+        };
     }
 
     //CPU and GPU filtering
