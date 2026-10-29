@@ -9,6 +9,8 @@ public record ProductSearchCriteriaDTO(String name, //search bar substring match
                                        Long brandId,
                                        BigDecimal minPrice,
                                        BigDecimal maxPrice,
+                                       BigDecimal minWeight,
+                                       BigDecimal maxWeight,
                                        Map<String, List<String>> textSpecFilters, //spec key → acceptable text values
                                        Map<String, List<BigDecimal>> numberSpecFilters // spec key → acceptable numeric values
 

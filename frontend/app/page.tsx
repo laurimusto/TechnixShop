@@ -29,6 +29,11 @@ type PageResponse = {
 
 export default function Home() {
   const [query, setQuery] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [minWeight, setMinWeight] = useState("");
+  const [maxWeight, setMaxWeight] = useState("");
+  const [sort, setSort] = useState("");
   const [page, setPage] = useState(0);
   const [data, setData] = useState<PageResponse | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -37,12 +42,24 @@ export default function Home() {
     const timeout = setTimeout(() => {
       const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE) });
       if (query.trim()) params.set("name", query.trim());
+      if (minPrice) params.set("minPrice", minPrice);
+      if (maxPrice) params.set("maxPrice", maxPrice);
+      if (minWeight) params.set("minWeight", minWeight);
+      if (maxWeight) params.set("maxWeight", maxWeight);
+      if (sort) params.set("sort", sort);
       fetch(`${API_BASE}/search?${params.toString()}`)
         .then((res) => res.json())
         .then(setData);
     }, 300);
     return () => clearTimeout(timeout);
-  }, [query, page]);
+  }, [query, minPrice, maxPrice, minWeight, maxWeight, sort, page]);
+
+  function resetToFirstPage<T extends string>(setter: (value: T) => void) {
+    return (value: T) => {
+      setter(value);
+      setPage(0);
+    };
+  }
 
   // fixed-size slots so the grid never changes shape while loading/populating -
   // missing slots render as skeleton placeholders instead of real cards, but only while
@@ -65,7 +82,7 @@ export default function Home() {
       </div>
 
       <input
-        className="border px-3 py-2 w-full max-w-md"
+        className="border bg-white text-black px-3 py-2 w-full max-w-md"
         placeholder="Search products..."
         value={query}
         onChange={(e) => {
@@ -73,6 +90,60 @@ export default function Home() {
           setPage(0);
         }}
       />
+
+      <div className="flex flex-wrap gap-4 items-end text-sm">
+        <label className="flex flex-col gap-1">
+          <span className="text-gray-700">Min price (€)</span>
+          <input
+            type="number"
+            className="border bg-white text-black px-2 py-1 w-28"
+            value={minPrice}
+            onChange={(e) => resetToFirstPage(setMinPrice)(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-gray-700">Max price (€)</span>
+          <input
+            type="number"
+            className="border bg-white text-black px-2 py-1 w-28"
+            value={maxPrice}
+            onChange={(e) => resetToFirstPage(setMaxPrice)(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-gray-700">Min weight (kg)</span>
+          <input
+            type="number"
+            className="border bg-white text-black px-2 py-1 w-28"
+            value={minWeight}
+            onChange={(e) => resetToFirstPage(setMinWeight)(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-gray-700">Max weight (kg)</span>
+          <input
+            type="number"
+            className="border bg-white text-black px-2 py-1 w-28"
+            value={maxWeight}
+            onChange={(e) => resetToFirstPage(setMaxWeight)(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-gray-700">Sort by</span>
+          <select
+            className="border bg-white text-black px-2 py-1"
+            value={sort}
+            onChange={(e) => resetToFirstPage(setSort)(e.target.value)}
+          >
+            <option value="">Relevance</option>
+            <option value="price,asc">Price: Low to High</option>
+            <option value="price,desc">Price: High to Low</option>
+            <option value="averageRating,desc">Rating: High to Low</option>
+            <option value="weightKg,asc">Weight: Low to High</option>
+            <option value="weightKg,desc">Weight: High to Low</option>
+          </select>
+        </label>
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {slots.map((product, i) =>

@@ -29,6 +29,8 @@ public class ProductController {
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) BigDecimal minWeight,
+            @RequestParam(required = false) BigDecimal maxWeight,
             @RequestParam(required = false) List<String> cpu,
             @RequestParam(required = false) List<String> gpu,
             @RequestParam(name = "ram_gb", required = false) List<BigDecimal> ramGb,
@@ -42,7 +44,7 @@ public class ProductController {
         if (ramGb != null) numberSpecFilters.put("ram_gb", ramGb);
         if (displaySizeIn != null) numberSpecFilters.put("display_size_in", displaySizeIn);
 
-        ProductSearchCriteriaDTO criteria = new ProductSearchCriteriaDTO(name, categoryId, brandId, minPrice, maxPrice, textSpecFilters, numberSpecFilters);
+        ProductSearchCriteriaDTO criteria = new ProductSearchCriteriaDTO(name, categoryId, brandId, minPrice, maxPrice, minWeight, maxWeight, textSpecFilters, numberSpecFilters);
         return productService.search(criteria, pageable);
     }
 }

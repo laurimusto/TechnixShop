@@ -38,12 +38,14 @@ public class ProductService {
         Specification<Product> brandFilter = criteria.brandId() != null ? ProductSpecifications.hasBrand(criteria.brandId()) : null;
         // OR (not AND): a caller may supply only one bound, e.g. "price >= 500" with no upper limit.
         Specification<Product> priceFilter = criteria.maxPrice() != null || criteria.minPrice() != null ? ProductSpecifications.numericBetween("price", criteria.minPrice(), criteria.maxPrice()) : null;
+        Specification<Product> weightFilter = criteria.maxWeight() != null || criteria.minWeight() != null ? ProductSpecifications.numericBetween("weightKg", criteria.minWeight(), criteria.maxWeight()) : null;
 
         Specification<Product> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
         if (nameFilter != null) spec = spec.and(nameFilter);
         if (categoryFilter != null) spec = spec.and(categoryFilter);
         if (brandFilter != null) spec = spec.and(brandFilter);
         if (priceFilter != null) spec = spec.and(priceFilter);
+        if (weightFilter != null) spec = spec.and(weightFilter);
 
         // Text and number specs are reassigned in loop because the number of entries is unknown ahead of time.
         if (criteria.textSpecFilters() != null) {
