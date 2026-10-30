@@ -12,6 +12,13 @@ public record ProductResponseDTO(
         String brandName,
         String imageUrl,
         BigDecimal weightKg,
+        BigDecimal weightLb,
+        BigDecimal lengthCm,
+        BigDecimal lengthIn,
+        BigDecimal widthCm,
+        BigDecimal widthIn,
+        BigDecimal heightCm,
+        BigDecimal heightIn,
         BigDecimal averageRating,
         int ratingCount
 ) {

@@ -1,6 +1,7 @@
 package com.dto.product;
 
 import com.entity.Product;
+import com.utils.UnitConverter;
 
 // Flattens a Product entity into a response shape, deliberately avoiding category.getSpecs() /
 // spec.getCategories() - that bidirectional relationship serializes into an infinite loop if
@@ -18,6 +19,13 @@ public class ProductResponseMapper {
                 product.getBrand().getName(),
                 imageUrl,
                 product.getWeightKg(),
+                UnitConverter.kgToLbs(product.getWeightKg()),
+                product.getLengthCm(),
+                UnitConverter.cmToInch(product.getLengthCm()),
+                product.getWidthCm(),
+                UnitConverter.cmToInch(product.getWidthCm()),
+                product.getHeightCm(),
+                UnitConverter.cmToInch(product.getHeightCm()),
                 product.getAverageRating(),
                 product.getRatingCount()
         );
