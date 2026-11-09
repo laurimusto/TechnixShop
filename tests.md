@@ -71,11 +71,6 @@ Run several specific classes at once:
 | `CatalogIntegrationTest` (integration) | `/search` and `/categories` against the real seeded catalog data (`CatalogDataSeeder` runs automatically against the fresh container) — pagination, category filter, price-range filter, nested category tree |
 | `SecurityIntegrationTest` (integration) | SQL injection payloads in login/search don't bypass auth or crash; malformed JSON returns a clean 4xx, not a stack trace; XSS-style payloads are rejected or treated as inert data, never executed |
 
-The project's only previous test (`ILoveShopping1ApplicationTests.contextLoads`) was deleted —
-it was broken (`.env` loading happens in `main()`, which `@SpringBootTest` never calls, so
-`DB_URL` was never resolved and the context failed to start every time it was run via `mvn test`).
-The integration tests above replace it with something that actually works.
-
 ## A real bug these integration tests caught
 
 `AuthIntegrationTest`'s stolen-token-reuse test initially failed against the real database even
