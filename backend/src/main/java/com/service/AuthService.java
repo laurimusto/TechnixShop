@@ -7,6 +7,7 @@ import com.entity.RefreshToken;
 import com.entity.User;
 import com.exception.*;
 import com.repository.RefreshTokenRepository;
+import com.security.AccessTokenDenylist;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
@@ -19,7 +20,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.repository.UserRepository;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -40,6 +44,8 @@ public class AuthService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final AccessTokenDenylist accessTokenDenylist;
+    private final TransactionTemplate requiresNewTransactionTemplate;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -50,10 +56,13 @@ public class AuthService {
     @Value("${refresh.expiration}")
     private Long refreshExpirationMs;
 
-    public AuthService(UserRepository userRepository, BCryptPasswordEncoder bCryptPasswordEncoder, RefreshTokenRepository refreshTokenRepository) {
+    public AuthService(UserRepository userRepository, BCryptPasswordEncoder bCryptPasswordEncoder, RefreshTokenRepository refreshTokenRepository, AccessTokenDenylist accessTokenDenylist, PlatformTransactionManager transactionManager) {
         this.userRepository = userRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.accessTokenDenylist = accessTokenDenylist;
+        this.requiresNewTransactionTemplate = new TransactionTemplate(transactionManager);
+        this.requiresNewTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     public LoginResponseDTO createUser(RegisterRequestDTO request) {
@@ -99,6 +108,7 @@ public class AuthService {
         return Jwts.builder()
                 .setSubject(String.valueOf(user.getUserId()))
                 .claim("role", user.getRole())
+                .setId(UUID.randomUUID().toString())
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(secretKey, SignatureAlgorithm.HS256)
@@ -158,7 +168,13 @@ public class AuthService {
         RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(hashRefreshToken).orElseThrow(() -> new InvalidRefreshTokenException("Refresh token not found in database!"));
 
         if(refreshToken.isRevoked()){ //check if its revoked
-            refreshTokenRepository.revokeAllByFamilyId(refreshToken.getFamilyId());
+            // runs in its own committed transaction, independent of this method's - otherwise
+            // throwing below would roll back this bulk update too, since both would otherwise
+            // share one @Transactional boundary that rolls back on any RuntimeException,
+            // silently undoing the family-wide revocation the instant it's needed most.
+            UUID familyId = refreshToken.getFamilyId();
+            requiresNewTransactionTemplate.executeWithoutResult(status ->
+                    refreshTokenRepository.revokeAllByFamilyId(familyId));
             throw new InvalidRefreshTokenException("refreshToken is revoked!");
         }
         if(refreshToken.getExpiryDate().before(new Date())) { //check expiry date
@@ -173,6 +189,19 @@ public class AuthService {
         return new LoginResponseDTO(newAccessToken, newRefreshToken, refreshToken.getUser().getEmail(), refreshToken.getUser().getUserId());
     }
 
+
+    @Transactional
+    public void logout(String jti, Date accessTokenExpiry, String rawRefreshToken) {
+        accessTokenDenylist.revoke(jti, accessTokenExpiry);
+
+        if (rawRefreshToken != null) {
+            String tokenHash = hashToken(rawRefreshToken);
+            refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(refreshToken -> {
+                refreshToken.setRevoked(true);
+                refreshTokenRepository.save(refreshToken);
+            });
+        }
+    }
 
     private String hashToken(String rawToken) {
         String tokenHash;

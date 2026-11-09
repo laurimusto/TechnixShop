@@ -6,7 +6,9 @@ import com.dto.user.LoginRequestDTO;
 import com.dto.user.LoginResponseDTO;
 import com.dto.user.RegisterRequestDTO;
 import com.service.AuthService;
+import io.jsonwebtoken.Claims;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -20,6 +22,9 @@ public class AuthController {
 
     private final AuthService authService;
 
+    @Value("${refresh.expiration}")
+    private long refreshExpirationMs;
+
     public AuthController(AuthService authService) {
         this.authService = authService;
     }
@@ -27,13 +32,7 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponseDTO> register(@RequestBody @Valid RegisterRequestDTO registerRequestDTO) {
         LoginResponseDTO result = authService.createUser(registerRequestDTO);
-        ResponseCookie cookie = ResponseCookie.from("refreshToken", result.refreshToken())
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
-                .path("/")
-                .maxAge(Duration.ofDays(7))
-                .build();
+        ResponseCookie cookie = buildRefreshCookie(result.refreshToken(), Duration.ofMillis(refreshExpirationMs));
 
         AuthResponseDTO body = new AuthResponseDTO(result.token(), result.email(), result.id());
 
@@ -46,13 +45,7 @@ public class AuthController {
     public ResponseEntity<AuthResponseDTO> login(@RequestBody @Valid LoginRequestDTO loginRequestDTO) {
         LoginResponseDTO result = authService.login(loginRequestDTO.email(), loginRequestDTO.password());
 
-        ResponseCookie cookie = ResponseCookie.from("refreshToken", result.refreshToken())
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
-                .path("/")
-                .maxAge(Duration.ofDays(7))
-                .build();
+        ResponseCookie cookie = buildRefreshCookie(result.refreshToken(), Duration.ofMillis(refreshExpirationMs));
 
         AuthResponseDTO body = new AuthResponseDTO(result.token(), result.email(), result.id());
 
@@ -67,13 +60,7 @@ public class AuthController {
     public ResponseEntity<AuthResponseDTO> refresh(@CookieValue("refreshToken") String rawRefreshToken) {
         LoginResponseDTO result = authService.refresh(rawRefreshToken);
 
-        ResponseCookie cookie = ResponseCookie.from("refreshToken", result.refreshToken())
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
-                .path("/")
-                .maxAge(Duration.ofDays(7))
-                .build();
+        ResponseCookie cookie = buildRefreshCookie(result.refreshToken(), Duration.ofMillis(refreshExpirationMs));
 
         AuthResponseDTO body = new AuthResponseDTO(result.token(), result.email(), result.id());
 
@@ -81,5 +68,31 @@ public class AuthController {
                 .ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(body);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@RequestHeader("Authorization") String authorizationHeader,
+                                        @CookieValue(value = "refreshToken", required = false) String rawRefreshToken) {
+        String accessToken = authorizationHeader.substring(7); // strip "Bearer "
+        Claims claims = authService.parseToken(accessToken);
+
+        authService.logout(claims.getId(), claims.getExpiration(), rawRefreshToken);
+
+        ResponseCookie expiredCookie = buildRefreshCookie("", Duration.ZERO);
+
+        return ResponseEntity
+                .noContent()
+                .header(HttpHeaders.SET_COOKIE, expiredCookie.toString())
+                .build();
+    }
+
+    private ResponseCookie buildRefreshCookie(String value, Duration maxAge) {
+        return ResponseCookie.from("refreshToken", value)
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Strict")
+                .path("/")
+                .maxAge(maxAge)
+                .build();
     }
 }

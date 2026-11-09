@@ -116,4 +116,10 @@ public class GlobalExceptionHandler {
         log.info("Invalid refresh token: {}", ex.getMessage());
         return createErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponseDTO> handleMalformedRequestBody(HttpMessageNotReadableException ex) {
+        log.info("Malformed request body: {}", ex.getMessage());
+        return createErrorResponse(HttpStatus.BAD_REQUEST, "Malformed request body");
+    }
 }

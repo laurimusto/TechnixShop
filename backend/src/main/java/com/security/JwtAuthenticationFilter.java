@@ -21,9 +21,11 @@ import java.util.List;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final AuthService authService;
+    private final AccessTokenDenylist accessTokenDenylist;
 
-    public JwtAuthenticationFilter(AuthService authService) {
+    public JwtAuthenticationFilter(AuthService authService, AccessTokenDenylist accessTokenDenylist) {
         this.authService = authService;
+        this.accessTokenDenylist = accessTokenDenylist;
     }
 
     @Override
@@ -41,6 +43,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String token = header.substring(7);
             Claims claims = authService.parseToken(token);
+
+            if (accessTokenDenylist.isRevoked(claims.getId())) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("Token has been revoked");
+                return;
+            }
+
             String userId = claims.getSubject();
             String userRole = claims.get("role", String.class);
 
