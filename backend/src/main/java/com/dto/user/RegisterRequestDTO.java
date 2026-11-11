@@ -6,5 +6,6 @@ import jakarta.validation.constraints.Size;
 
 public record RegisterRequestDTO(@NotBlank(message = "E-mail cannot be blank") @Email(message = "Invalid email format") String email,
                                  @NotBlank(message = "Password cannot be blank") @Size(min = 3, message = "Password must be at least 3 characters") String password,
-                                 @NotBlank(message = "Repeat password cannot be blank") String repeatPassword) {
+                                 @NotBlank(message = "Repeat password cannot be blank") String repeatPassword,
+                                 @NotBlank(message = "CAPTCHA token cannot be blank") String captchaToken) {
 }

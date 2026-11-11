@@ -52,7 +52,7 @@ class SecurityIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("an XSS-style payload as an email is rejected by input validation, not stored or executed")
     void xssPayloadAsEmail_rejectedByValidation() throws Exception {
-        RegisterRequestDTO payload = new RegisterRequestDTO("<script>alert(1)</script>", "password123", "password123");
+        RegisterRequestDTO payload = new RegisterRequestDTO("<script>alert(1)</script>", "password123", "password123", "test-captcha-token");
 
         MvcResult result = mockMvc.perform(post("/register")
                         .contentType(MediaType.APPLICATION_JSON)

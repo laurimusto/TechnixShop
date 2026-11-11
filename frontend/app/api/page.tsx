@@ -1,10 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import Script from "next/script";
+import { useRef, useState } from "react";
 
 const API_BASE = "http://localhost:8080";
+const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? "";
 
 type AuthResponse = { token: string; email: string; id: number };
+
+declare global {
+  interface Window {
+    grecaptcha?: {
+      ready: (cb: () => void) => void;
+      render: (
+        container: HTMLElement,
+        params: {
+          sitekey: string;
+          callback: (token: string) => void;
+          "expired-callback": () => void;
+        },
+      ) => number;
+      reset: (widgetId?: number) => void;
+    };
+  }
+}
 
 export default function ApiTestConsole() {
   // access token kept in memory only (React state), never written to local/session storage
@@ -15,6 +35,9 @@ export default function ApiTestConsole() {
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerRepeatPassword, setRegisterRepeatPassword] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaContainerRef = useRef<HTMLDivElement>(null);
+  const captchaWidgetIdRef = useRef<number | null>(null);
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -25,8 +48,25 @@ export default function ApiTestConsole() {
   const [status, setStatus] = useState<number | null>(null);
   const [response, setResponse] = useState("");
 
+  function renderCaptcha() {
+    const grecaptcha = window.grecaptcha;
+    if (!grecaptcha) return;
+    grecaptcha.ready(() => {
+      if (!captchaContainerRef.current || captchaWidgetIdRef.current !== null) return;
+      captchaWidgetIdRef.current = grecaptcha.render(captchaContainerRef.current, {
+        sitekey: RECAPTCHA_SITE_KEY,
+        callback: setCaptchaToken,
+        "expired-callback": () => setCaptchaToken(null),
+      });
+    });
+  }
+
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
+    if (!captchaToken) {
+      setAuthMessage("Please complete the CAPTCHA first");
+      return;
+    }
     const res = await fetch(`${API_BASE}/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -35,8 +75,12 @@ export default function ApiTestConsole() {
         email: registerEmail,
         password: registerPassword,
         repeatPassword: registerRepeatPassword,
+        captchaToken,
       }),
     });
+    // Google accepts each token only once, so a retry needs a fresh checkbox tick
+    window.grecaptcha?.reset(captchaWidgetIdRef.current ?? undefined);
+    setCaptchaToken(null);
     const data = await res.json();
     if (res.ok) {
       const auth = data as AuthResponse;
@@ -67,10 +111,25 @@ export default function ApiTestConsole() {
     }
   }
 
-  function handleLogout() {
-    setToken(null);
-    setLoggedInEmail(null);
-    setAuthMessage("Logged out (token cleared from memory)");
+  async function handleLogout() {
+    try {
+      // backend denylists the access token's jti, revokes the refresh token, and clears the cookie
+      const res = await fetch(`${API_BASE}/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+      setAuthMessage(
+        res.ok
+          ? "Logged out (tokens revoked on the server)"
+          : `Server logout failed (HTTP ${res.status}); token cleared from memory anyway`,
+      );
+    } catch {
+      setAuthMessage("Backend unreachable; token cleared from memory anyway");
+    } finally {
+      setToken(null);
+      setLoggedInEmail(null);
+    }
   }
 
   async function handleSend(e: React.FormEvent) {
@@ -97,22 +156,31 @@ export default function ApiTestConsole() {
 
   return (
     <main className="max-w-3xl mx-auto p-6 space-y-8 font-sans">
-      <h1 className="text-xl font-semibold">API test console</h1>
+      <Script
+        src="https://www.google.com/recaptcha/api.js?render=explicit"
+        onReady={renderCaptcha}
+      />
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">API test console</h1>
+        <Link href="/" className="border px-3 py-1 text-sm">
+          ← Back to shop
+        </Link>
+      </div>
 
       <section className="space-y-2">
         <h2 className="font-medium">Auth</h2>
-        <p className="text-sm">
-          {loggedInEmail ? `Logged in as ${loggedInEmail}` : "Not logged in"}
+        <div className="flex items-center gap-3 text-sm">
+          <span>{loggedInEmail ? `Logged in as ${loggedInEmail}` : "Not logged in"}</span>
           {token && (
-            <button onClick={handleLogout} className="ml-3 underline">
+            <button onClick={handleLogout} className="border px-3 py-1">
               Logout
             </button>
           )}
-        </p>
+        </div>
         {authMessage && <p className="text-sm text-gray-600">{authMessage}</p>}
 
         <div className="flex gap-6">
-          <form onSubmit={handleRegister} className="flex flex-col gap-2 border p-3 w-64">
+          <form onSubmit={handleRegister} className="flex flex-col gap-2 border p-3 w-80">
             <span className="font-medium text-sm">Register</span>
             <input
               className="border px-2 py-1"
@@ -134,6 +202,7 @@ export default function ApiTestConsole() {
               value={registerRepeatPassword}
               onChange={(e) => setRegisterRepeatPassword(e.target.value)}
             />
+            <div ref={captchaContainerRef} />
             <button type="submit" className="border px-2 py-1">
               Register
             </button>

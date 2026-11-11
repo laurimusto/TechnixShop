@@ -117,6 +117,12 @@ public class GlobalExceptionHandler {
         return createErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
+    @ExceptionHandler(CaptchaVerificationException.class)
+    public ResponseEntity<ErrorResponseDTO> handleCaptchaFailed(CaptchaVerificationException ex) {
+        log.info("CAPTCHA verification failed: {}", ex.getMessage());
+        return createErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponseDTO> handleMalformedRequestBody(HttpMessageNotReadableException ex) {
         log.info("Malformed request body: {}", ex.getMessage());

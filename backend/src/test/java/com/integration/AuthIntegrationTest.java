@@ -31,7 +31,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
     }
 
     private MvcResult register(String email, String password) throws Exception {
-        RegisterRequestDTO request = new RegisterRequestDTO(email, password, password);
+        RegisterRequestDTO request = new RegisterRequestDTO(email, password, password, "test-captcha-token");
         return mockMvc.perform(post("/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))

@@ -32,7 +32,7 @@ class RegisterRequestDTOValidationTest {
     @Test
     @DisplayName("a fully valid registration request has no violations")
     void validRequest_hasNoViolations() {
-        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "password", "password");
+        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "password", "password", "test-captcha-token");
 
         assertThat(validator.validate(request)).isEmpty();
     }
@@ -40,7 +40,7 @@ class RegisterRequestDTOValidationTest {
     @Test
     @DisplayName("a blank email is rejected")
     void blankEmail_isRejected() {
-        RegisterRequestDTO request = new RegisterRequestDTO("", "password", "password");
+        RegisterRequestDTO request = new RegisterRequestDTO("", "password", "password", "test-captcha-token");
 
         Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
 
@@ -51,7 +51,7 @@ class RegisterRequestDTOValidationTest {
     @Test
     @DisplayName("a malformed email is rejected")
     void malformedEmail_isRejected() {
-        RegisterRequestDTO request = new RegisterRequestDTO("not-an-email", "password", "password");
+        RegisterRequestDTO request = new RegisterRequestDTO("not-an-email", "password", "password", "test-captcha-token");
 
         Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
 
@@ -61,7 +61,7 @@ class RegisterRequestDTOValidationTest {
     @Test
     @DisplayName("a password shorter than 3 characters is rejected")
     void tooShortPassword_isRejected() {
-        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "ab", "ab");
+        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "ab", "ab", "test-captcha-token");
 
         Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
 
@@ -71,7 +71,7 @@ class RegisterRequestDTOValidationTest {
     @Test
     @DisplayName("a blank repeatPassword is rejected")
     void blankRepeatPassword_isRejected() {
-        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "password", "");
+        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "password", "", "test-captcha-token");
 
         Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
 

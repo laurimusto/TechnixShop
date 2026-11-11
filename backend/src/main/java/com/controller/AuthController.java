@@ -5,6 +5,8 @@ import com.dto.user.AuthResponseDTO;
 import com.dto.user.LoginRequestDTO;
 import com.dto.user.LoginResponseDTO;
 import com.dto.user.RegisterRequestDTO;
+import com.exception.CaptchaVerificationException;
+import com.security.CaptchaVerifier;
 import com.service.AuthService;
 import io.jsonwebtoken.Claims;
 import jakarta.validation.Valid;
@@ -21,16 +23,22 @@ import java.time.Duration;
 public class AuthController {
 
     private final AuthService authService;
+    private final CaptchaVerifier captchaVerifier;
 
     @Value("${refresh.expiration}")
     private long refreshExpirationMs;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, CaptchaVerifier captchaVerifier) {
         this.authService = authService;
+        this.captchaVerifier = captchaVerifier;
     }
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponseDTO> register(@RequestBody @Valid RegisterRequestDTO registerRequestDTO) {
+        if (!captchaVerifier.verify(registerRequestDTO.captchaToken())) {
+            throw new CaptchaVerificationException("CAPTCHA verification failed");
+        }
+
         LoginResponseDTO result = authService.createUser(registerRequestDTO);
         ResponseCookie cookie = buildRefreshCookie(result.refreshToken(), Duration.ofMillis(refreshExpirationMs));
 

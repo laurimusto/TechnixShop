@@ -1,14 +1,20 @@
 package com.integration;
 
+import com.security.CaptchaVerifier;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.ObjectMapper;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 // Base for all @SpringBootTest integration tests: boots the real app against a real,
 // throwaway Postgres container (Docker required) instead of mocks, so these exercise the
@@ -45,10 +51,20 @@ public abstract class IntegrationTestBase {
         registry.add("cloudinary.cloud-name", () -> "test");
         registry.add("cloudinary.api-key", () -> "test");
         registry.add("cloudinary.api-secret", () -> "test");
+        registry.add("recaptcha.secret", () -> "test");
     }
 
     @Autowired
     protected MockMvc mockMvc;
     @Autowired
     protected ObjectMapper objectMapper;
+
+    // replaces the real GoogleRecaptchaVerifier so integration tests never call Google
+    @MockitoBean
+    protected CaptchaVerifier captchaVerifier;
+
+    @BeforeEach
+    void allowCaptchaByDefault() {
+        when(captchaVerifier.verify(any())).thenReturn(true);
+    }
 }

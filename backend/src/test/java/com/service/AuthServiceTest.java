@@ -237,7 +237,7 @@ class AuthServiceTest {
     void createUser_rejectsDuplicateEmail() {
         when(userRepository.existsByEmailIgnoreCase("test@example.com")).thenReturn(true);
 
-        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "password", "password");
+        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "password", "password", "test-captcha-token");
 
         assertThatThrownBy(() -> authService.createUser(request))
                 .isInstanceOf(EmailAlreadyExistsException.class);
@@ -248,7 +248,7 @@ class AuthServiceTest {
     void createUser_rejectsPasswordMismatch() {
         when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
 
-        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "password", "different");
+        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "password", "different", "test-captcha-token");
 
         assertThatThrownBy(() -> authService.createUser(request))
                 .isInstanceOf(PasswordMismatchException.class);
@@ -259,7 +259,7 @@ class AuthServiceTest {
     void createUser_rejectsTooShortPassword() {
         when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
 
-        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "ab", "ab");
+        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "ab", "ab", "test-captcha-token");
 
         assertThatThrownBy(() -> authService.createUser(request))
                 .isInstanceOf(PasswordTooShortException.class);
@@ -271,7 +271,7 @@ class AuthServiceTest {
         when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
         String longEmail = "a".repeat(45) + "@test.com"; // > 50 chars total
 
-        RegisterRequestDTO request = new RegisterRequestDTO(longEmail, "password", "password");
+        RegisterRequestDTO request = new RegisterRequestDTO(longEmail, "password", "password", "test-captcha-token");
 
         assertThatThrownBy(() -> authService.createUser(request))
                 .isInstanceOf(InvalidEmailException.class);
@@ -288,7 +288,7 @@ class AuthServiceTest {
             return user;
         });
 
-        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "password", "password");
+        RegisterRequestDTO request = new RegisterRequestDTO("test@example.com", "password", "password", "test-captcha-token");
         LoginResponseDTO result = authService.createUser(request);
 
         ArgumentCaptor<User> savedUserCaptor = ArgumentCaptor.forClass(User.class);
