@@ -128,7 +128,7 @@ public class AuthService {
 
     public Optional<User> authenticate(String email, String password) {
         Optional<User> user = userRepository.findByEmail(email);
-        if (user.isPresent() && bCryptPasswordEncoder.matches(password, user.get().getPassword())) {
+        if (user.isPresent() &&  user.get().getPassword() != null && bCryptPasswordEncoder.matches(password, user.get().getPassword())) {
             log.info("Successfully authenticated email: {}", email);
             return user;
         }

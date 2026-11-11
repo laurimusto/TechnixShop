@@ -74,7 +74,7 @@ class AuthServiceTest {
     }
 
     private User testUser() {
-        return new User(1L, "test@example.com", "hashed-password", Role.USER);
+        return new User(1L, "test@example.com", "hashed-password", Role.USER, null);
     }
 
     @Test
