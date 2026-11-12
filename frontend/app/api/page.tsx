@@ -6,11 +6,26 @@ import { useRef, useState } from "react";
 
 const API_BASE = "http://localhost:8080";
 const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? "";
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
 type AuthResponse = { token: string; email: string; id: number };
 
 declare global {
   interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (params: {
+            client_id: string;
+            callback: (response: { credential: string }) => void;
+          }) => void;
+          renderButton: (
+            container: HTMLElement,
+            options: { theme?: string; size?: string; text?: string },
+          ) => void;
+        };
+      };
+    };
     grecaptcha?: {
       ready: (cb: () => void) => void;
       render: (
@@ -41,6 +56,7 @@ export default function ApiTestConsole() {
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const googleButtonRef = useRef<HTMLDivElement>(null);
 
   const [method, setMethod] = useState("GET");
   const [path, setPath] = useState("/search?categoryId=1");
@@ -111,6 +127,39 @@ export default function ApiTestConsole() {
     }
   }
 
+  function renderGoogleButton() {
+    const google = window.google;
+    if (!google || !googleButtonRef.current) return;
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogleCredential,
+    });
+    google.accounts.id.renderButton(googleButtonRef.current, {
+      theme: "outline",
+      size: "medium",
+      text: "signin_with",
+    });
+  }
+
+  // credential is Google's signed ID token; the backend verifies it and returns our own JWT
+  async function handleGoogleCredential(response: { credential: string }) {
+    const res = await fetch(`${API_BASE}/googlelogin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ idToken: response.credential }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const auth = data as AuthResponse;
+      setToken(auth.token);
+      setLoggedInEmail(auth.email);
+      setAuthMessage(`Logged in with Google as ${auth.email}`);
+    } else {
+      setAuthMessage(`Error ${res.status}: ${data.message ?? JSON.stringify(data)}`);
+    }
+  }
+
   async function handleLogout() {
     try {
       // backend denylists the access token's jti, revokes the refresh token, and clears the cookie
@@ -160,6 +209,7 @@ export default function ApiTestConsole() {
         src="https://www.google.com/recaptcha/api.js?render=explicit"
         onReady={renderCaptcha}
       />
+      <Script src="https://accounts.google.com/gsi/client" onReady={renderGoogleButton} />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">API test console</h1>
         <Link href="/" className="border px-3 py-1 text-sm">
@@ -226,6 +276,8 @@ export default function ApiTestConsole() {
             <button type="submit" className="border px-2 py-1">
               Login
             </button>
+            <span className="text-xs text-gray-600 text-center">or</span>
+            <div ref={googleButtonRef} />
           </form>
         </div>
       </section>

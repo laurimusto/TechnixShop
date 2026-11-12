@@ -2,10 +2,12 @@ package com.integration;
 
 import com.dto.error.ErrorResponseDTO;
 import com.dto.user.AuthResponseDTO;
+import com.dto.user.GoogleLoginRequestDTO;
 import com.dto.user.LoginRequestDTO;
 import com.dto.user.RegisterRequestDTO;
 import com.repository.RefreshTokenRepository;
 import com.repository.UserRepository;
+import com.security.GoogleTokenVerifier.GoogleUser;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,9 +15,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -163,5 +167,86 @@ class AuthIntegrationTest extends IntegrationTestBase {
         // the revoked refresh token must also be rejected
         MvcResult rejectedRefresh = mockMvc.perform(post("/refresh").cookie(refreshCookie)).andReturn();
         assertThat(rejectedRefresh.getResponse().getStatus()).isEqualTo(401);
+    }
+
+    private MvcResult googleLogin(String idToken) throws Exception {
+        return mockMvc.perform(post("/googlelogin")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new GoogleLoginRequestDTO(idToken))))
+                .andReturn();
+    }
+
+    @Test
+    @DisplayName("googlelogin: first sign-in creates a passwordless user; a second sign-in reuses that same user")
+    void googleLogin_createsUserThenReusesIt() throws Exception {
+        String email = uniqueEmail();
+        String sub = UUID.randomUUID().toString();
+        when(googleTokenVerifier.verify("google-token")).thenReturn(Optional.of(new GoogleUser(sub, email, true)));
+
+        MvcResult first = googleLogin("google-token");
+        assertThat(first.getResponse().getStatus()).isEqualTo(200);
+        assertThat(authBody(first).token()).isNotBlank();
+        assertThat(refreshCookieOf(first)).isNotNull();
+
+        var savedUser = userRepository.findByGoogleSub(sub).orElseThrow();
+        assertThat(savedUser.getEmail()).isEqualTo(email);
+        assertThat(savedUser.getPassword()).isNull();
+
+        MvcResult second = googleLogin("google-token");
+        assertThat(second.getResponse().getStatus()).isEqualTo(200);
+        assertThat(authBody(second).id()).isEqualTo(savedUser.getUserId());
+    }
+
+    @Test
+    @DisplayName("googlelogin: an email already owned by a password account is rejected with 409, never auto-linked")
+    void googleLogin_existingPasswordAccount_returns409AndDoesNotLink() throws Exception {
+        String email = uniqueEmail();
+        register(email, "password123");
+        String sub = UUID.randomUUID().toString();
+        when(googleTokenVerifier.verify("google-token")).thenReturn(Optional.of(new GoogleUser(sub, email, true)));
+
+        MvcResult result = googleLogin("google-token");
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(409);
+        assertThat(userRepository.findByEmail(email).orElseThrow().getGoogleSub()).isNull();
+    }
+
+    @Test
+    @DisplayName("googlelogin: a Google account with an unverified email is rejected with 401 and no user is created")
+    void googleLogin_unverifiedEmail_returns401() throws Exception {
+        String email = uniqueEmail();
+        String sub = UUID.randomUUID().toString();
+        when(googleTokenVerifier.verify("google-token")).thenReturn(Optional.of(new GoogleUser(sub, email, false)));
+
+        MvcResult result = googleLogin("google-token");
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+        assertThat(userRepository.findByGoogleSub(sub)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("googlelogin: an invalid/forged Google token is rejected with 401")
+    void googleLogin_invalidToken_returns401() throws Exception {
+        when(googleTokenVerifier.verify("forged-token")).thenReturn(Optional.empty());
+
+        MvcResult result = googleLogin("forged-token");
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("login: a passwordless (Google-only) account cannot be logged into with any password")
+    void login_googleOnlyAccount_rejectedWith401() throws Exception {
+        String email = uniqueEmail();
+        when(googleTokenVerifier.verify("google-token"))
+                .thenReturn(Optional.of(new GoogleUser(UUID.randomUUID().toString(), email, true)));
+        googleLogin("google-token");
+
+        MvcResult result = mockMvc.perform(post("/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequestDTO(email, "anything"))))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
     }
 }

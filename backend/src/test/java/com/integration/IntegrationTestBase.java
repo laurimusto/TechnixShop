@@ -1,6 +1,7 @@
 package com.integration;
 
 import com.security.CaptchaVerifier;
+import com.security.GoogleTokenVerifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -52,6 +53,7 @@ public abstract class IntegrationTestBase {
         registry.add("cloudinary.api-key", () -> "test");
         registry.add("cloudinary.api-secret", () -> "test");
         registry.add("recaptcha.secret", () -> "test");
+        registry.add("google.client-id", () -> "test-client-id");
     }
 
     @Autowired
@@ -62,6 +64,11 @@ public abstract class IntegrationTestBase {
     // replaces the real GoogleRecaptchaVerifier so integration tests never call Google
     @MockitoBean
     protected CaptchaVerifier captchaVerifier;
+
+    // replaces the real GoogleIdTokenVerifierImpl so integration tests never call Google;
+    // individual tests stub verify(...) with whatever Optional they need
+    @MockitoBean
+    protected GoogleTokenVerifier googleTokenVerifier;
 
     @BeforeEach
     void allowCaptchaByDefault() {

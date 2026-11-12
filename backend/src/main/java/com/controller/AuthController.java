@@ -2,11 +2,15 @@ package com.controller;
 
 
 import com.dto.user.AuthResponseDTO;
+import com.dto.user.GoogleLoginRequestDTO;
 import com.dto.user.LoginRequestDTO;
 import com.dto.user.LoginResponseDTO;
 import com.dto.user.RegisterRequestDTO;
 import com.exception.CaptchaVerificationException;
+import com.exception.InvalidCredentialsException;
 import com.security.CaptchaVerifier;
+import com.security.GoogleTokenVerifier;
+import com.security.GoogleTokenVerifier.GoogleUser;
 import com.service.AuthService;
 import io.jsonwebtoken.Claims;
 import jakarta.validation.Valid;
@@ -24,13 +28,15 @@ public class AuthController {
 
     private final AuthService authService;
     private final CaptchaVerifier captchaVerifier;
+    private final GoogleTokenVerifier googleTokenVerifier;
 
     @Value("${refresh.expiration}")
     private long refreshExpirationMs;
 
-    public AuthController(AuthService authService, CaptchaVerifier captchaVerifier) {
+    public AuthController(AuthService authService, CaptchaVerifier captchaVerifier, GoogleTokenVerifier googleTokenVerifier) {
         this.authService = authService;
         this.captchaVerifier = captchaVerifier;
+        this.googleTokenVerifier = googleTokenVerifier;
     }
 
     @PostMapping("/register")
@@ -62,6 +68,23 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(body);
 
+    }
+
+    @PostMapping("/googlelogin")
+    public ResponseEntity<AuthResponseDTO> googleLogin(@RequestBody @Valid GoogleLoginRequestDTO request) {
+        GoogleUser googleUser = googleTokenVerifier.verify(request.idToken())
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid Google sign-in"));
+
+        LoginResponseDTO result = authService.googleLogin(googleUser);
+
+        ResponseCookie cookie = buildRefreshCookie(result.refreshToken(), Duration.ofMillis(refreshExpirationMs));
+
+        AuthResponseDTO body = new AuthResponseDTO(result.token(), result.email(), result.id());
+
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(body);
     }
 
     @PostMapping("/refresh")

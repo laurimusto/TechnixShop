@@ -8,6 +8,7 @@ import com.entity.User;
 import com.exception.*;
 import com.repository.RefreshTokenRepository;
 import com.security.AccessTokenDenylist;
+import com.security.GoogleTokenVerifier.GoogleUser;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
@@ -97,6 +98,34 @@ public class AuthService {
         String token = generateToken(user);
         String refreshToken = createRefreshToken(user, UUID.randomUUID());
         return new LoginResponseDTO(token, refreshToken, user.getEmail(), user.getUserId());
+    }
+
+    @Transactional
+    public LoginResponseDTO googleLogin(GoogleUser googleUser) {
+        if (!googleUser.emailVerified()) {
+            throw new InvalidCredentialsException("Google account email is not verified");
+        }
+
+        User user = userRepository.findByGoogleSub(googleUser.sub())
+                .orElseGet(() -> createGoogleUser(googleUser));
+
+        String token = generateToken(user);
+        String refreshToken = createRefreshToken(user, UUID.randomUUID());
+        return new LoginResponseDTO(token, refreshToken, user.getEmail(), user.getUserId());
+    }
+
+    private User createGoogleUser(GoogleUser googleUser) {
+        // never auto-link: our /register doesn't prove email ownership, so an existing
+        // password account with this email may have been pre-registered by an attacker
+        if (userRepository.existsByEmailIgnoreCase(googleUser.email())) {
+            throw new EmailAlreadyExistsException(
+                    "An account with this email already exists. Log in with your password.");
+        }
+        User user = new User();
+        user.setEmail(googleUser.email());
+        user.setRole(USER);
+        user.setGoogleSub(googleUser.sub());
+        return userRepository.save(user);
     }
 
     public String generateToken(User user) {
