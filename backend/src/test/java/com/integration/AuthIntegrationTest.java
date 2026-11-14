@@ -15,8 +15,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -148,6 +155,36 @@ class AuthIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("refresh: simultaneous requests with the same token - at most one is rotated, the rest are rejected")
+    void refresh_concurrentRequestsWithSameToken_onlyOneSucceeds() throws Exception {
+        Cookie cookie = refreshCookieOf(register(uniqueEmail(), "password123"));
+
+        int requests = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(requests);
+        CountDownLatch startGun = new CountDownLatch(1); // releases all threads at the same instant
+        try {
+            List<Future<Integer>> statuses = new ArrayList<>();
+            for (int i = 0; i < requests; i++) {
+                statuses.add(pool.submit(() -> {
+                    startGun.await();
+                    return mockMvc.perform(post("/refresh").cookie(cookie)).andReturn().getResponse().getStatus();
+                }));
+            }
+            startGun.countDown();
+
+            int succeeded = 0;
+            for (Future<Integer> status : statuses) {
+                int code = status.get(30, TimeUnit.SECONDS);
+                assertThat(code).isIn(200, 401);
+                if (code == 200) succeeded++;
+            }
+            assertThat(succeeded).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("logout: revokes both the access token (rejected on next use) and the refresh token (rejected on next refresh)")
     void logout_revokesAccessTokenAndRefreshToken() throws Exception {
         String email = uniqueEmail();
@@ -167,6 +204,26 @@ class AuthIntegrationTest extends IntegrationTestBase {
         // the revoked refresh token must also be rejected
         MvcResult rejectedRefresh = mockMvc.perform(post("/refresh").cookie(refreshCookie)).andReturn();
         assertThat(rejectedRefresh.getResponse().getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("logout: an invalid/expired access token (or none at all) still revokes the refresh token and clears the cookie")
+    void logout_withUnusableAccessToken_stillRevokesRefreshTokenAndClearsCookie() throws Exception {
+        Cookie refreshCookie = refreshCookieOf(register(uniqueEmail(), "password123"));
+
+        MvcResult logoutResult = mockMvc.perform(post("/logout")
+                .cookie(refreshCookie)
+                .header("Authorization", "Bearer not-a-valid-or-expired-jwt")).andReturn();
+
+        assertThat(logoutResult.getResponse().getStatus()).isEqualTo(204);
+        assertThat(refreshCookieOf(logoutResult).getMaxAge()).isZero(); // browser told to delete the cookie
+
+        MvcResult rejectedRefresh = mockMvc.perform(post("/refresh").cookie(refreshCookie)).andReturn();
+        assertThat(rejectedRefresh.getResponse().getStatus()).isEqualTo(401);
+
+        // no Authorization header and no cookie at all: nothing to revoke, but not an error
+        MvcResult bareLogout = mockMvc.perform(post("/logout")).andReturn();
+        assertThat(bareLogout.getResponse().getStatus()).isEqualTo(204);
     }
 
     private MvcResult googleLogin(String idToken) throws Exception {

@@ -20,4 +20,10 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Query("UPDATE RefreshToken r SET r.revoked = true WHERE r.familyId = :familyId")
     void revokeAllByFamilyId(UUID familyId);
 
+    // Atomic check-and-set: the database lets only one concurrent caller flip revoked from
+    // false to true. Returns 1 for the caller that claimed the token, 0 for everyone else.
+    @Modifying
+    @Query("UPDATE RefreshToken r SET r.revoked = true WHERE r.tokenId = :tokenId AND r.revoked = false")
+    int revokeIfActive(Long tokenId);
+
 }

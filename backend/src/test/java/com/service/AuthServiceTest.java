@@ -74,7 +74,13 @@ class AuthServiceTest {
     }
 
     private User testUser() {
-        return new User(1L, "test@example.com", "hashed-password", Role.USER, null);
+        // setters instead of the all-args constructor, so new User fields don't break this
+        User user = new User();
+        user.setUserId(1L);
+        user.setEmail("test@example.com");
+        user.setPassword("hashed-password");
+        user.setRole(Role.USER);
+        return user;
     }
 
     @Test
@@ -137,20 +143,45 @@ class AuthServiceTest {
         existingToken.setRevoked(false);
         existingToken.setExpiryDate(new Date(System.currentTimeMillis() + 100_000));
 
+        existingToken.setTokenId(42L);
+
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(existingToken));
+        when(refreshTokenRepository.revokeIfActive(42L)).thenReturn(1); // this request won the atomic claim
 
         LoginResponseDTO result = authService.refresh("raw-refresh-token");
 
+        // the old token is revoked by the atomic UPDATE, so only the new token goes through save()
+        verify(refreshTokenRepository).revokeIfActive(42L);
         ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
-        verify(refreshTokenRepository, times(2)).save(captor.capture());
+        verify(refreshTokenRepository).save(captor.capture());
 
-        RefreshToken savedOld = captor.getAllValues().get(0);
-        RefreshToken savedNew = captor.getAllValues().get(1);
-
-        assertThat(savedOld.isRevoked()).isTrue();
+        RefreshToken savedNew = captor.getValue();
         assertThat(savedNew.getFamilyId()).isEqualTo(familyId);
         assertThat(savedNew.isRevoked()).isFalse();
         assertThat(result.email()).isEqualTo(testUser().getEmail());
+    }
+
+    @Test
+    @DisplayName("refresh: losing a concurrent race for the same token throws, issues nothing, and revokes the family")
+    void refresh_losingConcurrentRaceRevokesWholeFamily() {
+        UUID familyId = UUID.randomUUID();
+        RefreshToken existingToken = new RefreshToken();
+        existingToken.setTokenId(42L);
+        existingToken.setFamilyId(familyId);
+        existingToken.setUser(testUser());
+        existingToken.setRevoked(false); // looked active when read...
+        existingToken.setExpiryDate(new Date(System.currentTimeMillis() + 100_000));
+
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(existingToken));
+        // ...but another request revoked it first, so the conditional UPDATE matches 0 rows
+        when(refreshTokenRepository.revokeIfActive(42L)).thenReturn(0);
+        lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(new SimpleTransactionStatus());
+
+        assertThatThrownBy(() -> authService.refresh("raced-raw-token"))
+                .isInstanceOf(InvalidRefreshTokenException.class);
+
+        verify(refreshTokenRepository).revokeAllByFamilyId(familyId);
+        verify(refreshTokenRepository, times(0)).save(any(RefreshToken.class));
     }
 
     @Test
@@ -333,6 +364,23 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.login("unknown@example.com", "password"))
                 .isInstanceOf(InvalidCredentialsException.class);
+
+        // bcrypt must still run (against a dummy hash), so the response time doesn't
+        // reveal that the email isn't registered
+        verify(bCryptPasswordEncoder).matches(eq("password"), any());
+    }
+
+    @Test
+    @DisplayName("logout: with no usable access token (null jti) still revokes the refresh token, and skips the denylist")
+    void logout_withoutAccessToken_stillRevokesRefreshToken() {
+        RefreshToken existingToken = new RefreshToken();
+        existingToken.setRevoked(false);
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(existingToken));
+
+        authService.logout(null, null, "raw-refresh-token");
+
+        assertThat(existingToken.isRevoked()).isTrue();
+        verifyNoInteractions(accessTokenDenylist);
     }
 
     @Test

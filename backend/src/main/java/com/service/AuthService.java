@@ -35,6 +35,7 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.enums.Role.USER;
 
@@ -47,6 +48,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final AccessTokenDenylist accessTokenDenylist;
     private final TransactionTemplate requiresNewTransactionTemplate;
+    private final String dummyPasswordHash;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -64,11 +66,14 @@ public class AuthService {
         this.accessTokenDenylist = accessTokenDenylist;
         this.requiresNewTransactionTemplate = new TransactionTemplate(transactionManager);
         this.requiresNewTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        // hash of a random throwaway value, made with the real encoder so it costs exactly as
+        // much to check as a real password hash (see authenticate)
+        this.dummyPasswordHash = bCryptPasswordEncoder.encode(UUID.randomUUID().toString());
     }
 
     public LoginResponseDTO createUser(RegisterRequestDTO request) {
         if (userRepository.existsByEmailIgnoreCase(request.email())) {
-            throw new EmailAlreadyExistsException("Email " + request.email() + " already exists.");
+            throw new EmailAlreadyExistsException("An account with this email already exists.");
         }
         if (!request.password().equals(request.repeatPassword())) {
             throw new PasswordMismatchException("Passwords don't match.");
@@ -157,8 +162,12 @@ public class AuthService {
 
     public Optional<User> authenticate(String email, String password) {
         Optional<User> user = userRepository.findByEmail(email);
-        if (user.isPresent() &&  user.get().getPassword() != null && bCryptPasswordEncoder.matches(password, user.get().getPassword())) {
-            log.info("Successfully authenticated email: {}", email);
+        String storedHash = user.map(User::getPassword).orElse(null);
+        // Always pay the bcrypt cost, even when there is no account (or no password, for
+        // Google-only accounts) - otherwise a fast "no" reveals that the email isn't registered.
+        boolean passwordMatches = bCryptPasswordEncoder.matches(password, storedHash != null ? storedHash : dummyPasswordHash);
+        if (user.isPresent() && storedHash != null && passwordMatches) {
+            log.info("Successfully authenticated user id: {}", user.get().getUserId());
             return user;
         }
         return Optional.empty();
@@ -189,39 +198,58 @@ public class AuthService {
 
     }
 
-    @Transactional
+    // Deliberately NOT @Transactional: this method runs two separate transactions one after
+    // the other (rotate, then - only on reuse - revoke the family). Nesting the second inside
+    // the first would make every rejected request hold one DB connection while waiting for
+    // another, so a burst of replayed tokens could exhaust the connection pool.
     public LoginResponseDTO refresh(String rawRefreshToken) {
-
-
         String hashRefreshToken = hashToken(rawRefreshToken);
-        RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(hashRefreshToken).orElseThrow(() -> new InvalidRefreshTokenException("Refresh token not found in database!"));
+        AtomicReference<UUID> reusedFamilyId = new AtomicReference<>();
 
-        if(refreshToken.isRevoked()){ //check if its revoked
-            // runs in its own committed transaction, independent of this method's - otherwise
-            // throwing below would roll back this bulk update too, since both would otherwise
-            // share one @Transactional boundary that rolls back on any RuntimeException,
-            // silently undoing the family-wide revocation the instant it's needed most.
-            UUID familyId = refreshToken.getFamilyId();
+        // transaction 1: validate the token and rotate it
+        LoginResponseDTO result = requiresNewTransactionTemplate.execute(status -> {
+            RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(hashRefreshToken).orElseThrow(() -> new InvalidRefreshTokenException("Refresh token not found in database!"));
+
+            if(refreshToken.isRevoked()){ //check if its revoked
+                reusedFamilyId.set(refreshToken.getFamilyId());
+                return null;
+            }
+            if(refreshToken.getExpiryDate().before(new Date())) { //check expiry date
+                throw new InvalidRefreshTokenException("refreshToken is expired!");
+            }
+
+            // The isRevoked() check above reads a snapshot, so two simultaneous requests with the
+            // same token can both pass it. This conditional UPDATE is the real single-use guard:
+            // only one request can flip revoked false -> true; the loser gets 0 rows and is
+            // treated as reuse, exactly like a replayed token.
+            if (refreshTokenRepository.revokeIfActive(refreshToken.getTokenId()) == 0) {
+                reusedFamilyId.set(refreshToken.getFamilyId());
+                return null;
+            }
+
+            String newRefreshToken = createRefreshToken(refreshToken.getUser(), refreshToken.getFamilyId());
+            String newAccessToken = generateToken(refreshToken.getUser());
+
+            return new LoginResponseDTO(newAccessToken, newRefreshToken, refreshToken.getUser().getEmail(), refreshToken.getUser().getUserId());
+        });
+
+        if (result == null) {
+            // transaction 2: reuse detected - revoke the whole family. It commits on its own
+            // before the exception is thrown, so the rejection can't roll the revocation back.
+            UUID familyId = reusedFamilyId.get();
             requiresNewTransactionTemplate.executeWithoutResult(status ->
                     refreshTokenRepository.revokeAllByFamilyId(familyId));
             throw new InvalidRefreshTokenException("refreshToken is revoked!");
         }
-        if(refreshToken.getExpiryDate().before(new Date())) { //check expiry date
-            throw new InvalidRefreshTokenException("refreshToken is expired!");
-        }
-
-        refreshToken.setRevoked(true);
-        refreshTokenRepository.save(refreshToken);
-        String newRefreshToken = createRefreshToken(refreshToken.getUser(), refreshToken.getFamilyId());
-        String newAccessToken = generateToken(refreshToken.getUser());
-
-        return new LoginResponseDTO(newAccessToken, newRefreshToken, refreshToken.getUser().getEmail(), refreshToken.getUser().getUserId());
+        return result;
     }
-
 
     @Transactional
     public void logout(String jti, Date accessTokenExpiry, String rawRefreshToken) {
-        accessTokenDenylist.revoke(jti, accessTokenExpiry);
+        // jti is null when the caller had no usable access token (missing or already expired)
+        if (jti != null) {
+            accessTokenDenylist.revoke(jti, accessTokenExpiry);
+        }
 
         if (rawRefreshToken != null) {
             String tokenHash = hashToken(rawRefreshToken);

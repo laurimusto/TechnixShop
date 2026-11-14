@@ -28,6 +28,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.accessTokenDenylist = accessTokenDenylist;
     }
 
+    // /logout handles its own token parsing: rejecting an expired access token here would
+    // stop the request before the controller could revoke the refresh token and clear the cookie.
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return request.getRequestURI().equals(request.getContextPath() + "/logout");
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
