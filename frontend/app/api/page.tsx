@@ -3,8 +3,8 @@
 import Link from "next/link";
 import Script from "next/script";
 import { useRef, useState } from "react";
+import { API_BASE, useShop } from "../providers";
 
-const API_BASE = "http://localhost:8080";
 const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? "";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
@@ -42,9 +42,8 @@ declare global {
 }
 
 export default function ApiTestConsole() {
-  // access token kept in memory only (React state), never written to local/session storage
-  const [token, setToken] = useState<string | null>(null);
-  const [loggedInEmail, setLoggedInEmail] = useState<string | null>(null);
+  // session is shared with the shop header; the access token is kept in memory only
+  const { token, email: loggedInEmail, setSession } = useShop();
   const [authMessage, setAuthMessage] = useState("");
 
   const [registerEmail, setRegisterEmail] = useState("");
@@ -100,8 +99,7 @@ export default function ApiTestConsole() {
     const data = await res.json();
     if (res.ok) {
       const auth = data as AuthResponse;
-      setToken(auth.token);
-      setLoggedInEmail(auth.email);
+      setSession(auth.token, auth.email);
       setAuthMessage(`Registered as ${auth.email}`);
     } else {
       setAuthMessage(`Error ${res.status}: ${data.message ?? JSON.stringify(data)}`);
@@ -119,8 +117,7 @@ export default function ApiTestConsole() {
     const data = await res.json();
     if (res.ok) {
       const auth = data as AuthResponse;
-      setToken(auth.token);
-      setLoggedInEmail(auth.email);
+      setSession(auth.token, auth.email);
       setAuthMessage(`Logged in as ${auth.email}`);
     } else {
       setAuthMessage(`Error ${res.status}: ${data.message ?? JSON.stringify(data)}`);
@@ -152,8 +149,7 @@ export default function ApiTestConsole() {
     const data = await res.json();
     if (res.ok) {
       const auth = data as AuthResponse;
-      setToken(auth.token);
-      setLoggedInEmail(auth.email);
+      setSession(auth.token, auth.email);
       setAuthMessage(`Logged in with Google as ${auth.email}`);
     } else {
       setAuthMessage(`Error ${res.status}: ${data.message ?? JSON.stringify(data)}`);
@@ -176,8 +172,7 @@ export default function ApiTestConsole() {
     } catch {
       setAuthMessage("Backend unreachable; token cleared from memory anyway");
     } finally {
-      setToken(null);
-      setLoggedInEmail(null);
+      setSession(null, null);
     }
   }
 
