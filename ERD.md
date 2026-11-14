@@ -2,8 +2,9 @@
 
 Scope: auth domain (users, refresh tokens, password reset tokens) and catalog domain
 (products, categories, brands, product images, filterable specs). Project 2/3 entities
-(cart, order, customer) are intentionally excluded. CAPTCHA, OAuth, and 2FA need no
-tables of their own at this stage — see "Excluded" below.
+(cart, order, customer) are intentionally excluded. CAPTCHA and 2FA need no tables of
+their own at this stage; Google sign-in is stored as a column on `users` — see "Google
+sign-in" and "Excluded" below.
 
 Catalog scope: Technix, an electronics retailer selling Laptops and Phones (2 top-level
 categories). Category-specific filterable specs (RAM, GPU, CPU, display size) use a
@@ -16,8 +17,9 @@ erDiagram
     USERS {
         bigint user_id PK
         varchar email "unique, not null"
-        varchar password "BCrypt hash, not null"
+        varchar password "BCrypt hash, nullable (null = Google-only account)"
         varchar role "not null"
+        varchar google_sub "unique, nullable, Google ID token sub claim"
     }
     REFRESH_TOKENS {
         bigint token_id PK
@@ -128,10 +130,23 @@ handle it.
 - `product_spec_values(spec_id, value_number)` — numeric spec range filters (RAM, display size)
 - `product_spec_values(spec_id, value_text)` — text/enum spec filters (CPU, GPU)
 
+## Google sign-in (V3 migration)
+
+- `users.password` became nullable: a Google-only account has no password, and `/login`
+  rejects any account whose password is null.
+- `users.google_sub` stores Google's permanent user id (the ID token's `sub` claim). Users
+  are matched by `sub`, never by email, because a Google account's email can change.
+  Postgres `UNIQUE` allows many NULLs, so password-only accounts don't collide.
+- A column instead of a separate `oauth_identities` table: with only one provider, a table
+  would add a join for no benefit. If a second provider (e.g. Facebook) is added, moving to
+  an `oauth_identities` table (provider + external id → user, 1 user : 0..N identities) is
+  the cleaner design.
+- Existing password accounts are never auto-linked to a Google identity, because
+  registration doesn't prove email ownership (see `AuthService.googleLogin`).
+
 ## Excluded from this schema
 
 - **CAPTCHA** — stateless, verified server-side per request, no persistence needed.
-- **OAuth** — would need an `oauth_identities` table (provider + external id → user); out of scope for now.
 - **2FA** — would need a `totp_secret` column on `users`; out of scope for now.
 - **Customer / Order / ShoppingCart** — Project 2/3 scope.
 
@@ -141,8 +156,9 @@ handle it.
 Table users {
   user_id bigint [pk, increment]
   email varchar [unique, not null]
-  password varchar [not null]
+  password varchar [null, note: 'BCrypt hash; null = Google-only account']
   role varchar [not null]
+  google_sub varchar [unique, null, note: 'Google ID token sub claim']
 }
 
 Table refresh_tokens {
