@@ -199,7 +199,8 @@ export default function ApiTestConsole() {
   }
 
   return (
-    <main className="max-w-3xl mx-auto p-6 space-y-8 font-sans">
+    // developer test page: kept on a light card so its plain light-theme styling stays readable
+    <main className="max-w-3xl mx-auto my-8 p-6 space-y-8 font-sans rounded-3xl bg-white text-slate-900 [color-scheme:light]">
       <Script
         src="https://www.google.com/recaptcha/api.js?render=explicit"
         onReady={renderCaptcha}

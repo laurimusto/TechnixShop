@@ -1,19 +1,109 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f3f4f6;
-  --foreground: #171717;
+/*
+  Theme tokens - the single place to re-brand the shop.
+  Each becomes a Tailwind colour: bg-page, bg-surface, text-muted, bg-accent, ...
+*/
+@theme {
+  --color-page: #2e3646; /* page background */
+  --color-surface: #384153; /* cards, toolbars */
+  --color-raised: #3f495c; /* popovers, dialogs, cart drawer */
+  --color-field: #283040; /* inputs */
+  --color-chrome: #242b38; /* header + footer */
+  --color-muted: #b8c2d1; /* secondary text (WCAG AA on all surfaces above) */
+  --color-accent: #fbbf24; /* brand colour */
+  --color-accent-hover: #fcd34d;
+  --color-on-accent: #1f2532; /* text on the accent colour */
+
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pop: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --animate-pop-in: pop-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-slide-in-right: slide-in-right 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pop {
+    50% {
+      transform: scale(1.35);
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes slide-in-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: none;
+    }
+  }
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+:root {
+  color-scheme: dark; /* native controls (select dropdowns, scrollbars) match the theme */
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-page);
+  color: #e2e8f0;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Tailwind v4 resets buttons to the default arrow cursor; shops expect the hand */
+button:not(:disabled),
+summary {
+  cursor: pointer;
+}
+
+/* loading placeholder with a moving shine */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 0.05) 25%,
+    rgb(255 255 255 / 0.12) 50%,
+    rgb(255 255 255 / 0.05) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* accessibility: users who ask the OS for less motion get none */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
