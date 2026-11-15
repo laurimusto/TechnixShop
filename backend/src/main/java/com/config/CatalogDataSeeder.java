@@ -38,6 +38,9 @@ public class CatalogDataSeeder implements CommandLineRunner {
 
     private final Random random = new Random(42);
 
+    // fixed demo stock until real stock management arrives with Project 2
+    private static final int DEMO_STOCK = 20;
+
     public CatalogDataSeeder(CategoryRepository categoryRepository,
                               BrandRepository brandRepository,
                               ProductRepository productRepository,
@@ -98,6 +101,20 @@ public class CatalogDataSeeder implements CommandLineRunner {
             new BigDecimal("6.7"), new BigDecimal("6.8")
     );
 
+    // Real product photos from the dummyjson.com CDN (picsum.photos was unreachable).
+    private static final String IMAGE_CDN = "https://cdn.dummyjson.com/product-images/";
+    private static final List<String> LAPTOP_IMAGES = List.of(
+            "laptops/apple-macbook-pro-14-inch-space-grey", "laptops/asus-zenbook-pro-dual-screen-laptop",
+            "laptops/huawei-matebook-x-pro", "laptops/lenovo-yoga-920", "laptops/new-dell-xps-13-9300-laptop"
+    );
+    private static final List<String> PHONE_IMAGES = List.of(
+            "smartphones/iphone-5s", "smartphones/iphone-6", "smartphones/iphone-13-pro", "smartphones/iphone-x",
+            "smartphones/oppo-a57", "smartphones/oppo-f19-pro-plus", "smartphones/oppo-k1", "smartphones/realme-c35",
+            "smartphones/realme-x", "smartphones/realme-xt", "smartphones/samsung-galaxy-s7",
+            "smartphones/samsung-galaxy-s8", "smartphones/samsung-galaxy-s10", "smartphones/vivo-s1",
+            "smartphones/vivo-v9", "smartphones/vivo-x21"
+    );
+
     @Override
     @Transactional
     public void run(String... args) {
@@ -139,7 +156,7 @@ public class CatalogDataSeeder implements CommandLineRunner {
             product.setName(brandName + " " + line);
             product.setDescription(line + " from " + brandName + " - everyday performance and portability.");
             product.setPrice(randomPrice(450, 2800));
-            product.setStockQuantity(random.nextInt(201));
+            product.setStockQuantity(DEMO_STOCK);
             product.setCategory(category);
             product.setBrand(brand);
             product.setWeightKg(randomDecimal(1.1, 2.6, 3));
@@ -155,7 +172,7 @@ public class CatalogDataSeeder implements CommandLineRunner {
             saveNumberSpec(product, specsByKey.get("ram_gb"), pick(LAPTOP_RAM_GB));
             saveNumberSpec(product, specsByKey.get("display_size_in"), pick(LAPTOP_DISPLAY_IN));
 
-            saveDefaultImage(product);
+            saveDefaultImage(product, LAPTOP_IMAGES);
         }
     }
 
@@ -171,7 +188,7 @@ public class CatalogDataSeeder implements CommandLineRunner {
             product.setName(brandName + " " + line);
             product.setDescription(line + " from " + brandName + " - the latest in mobile technology.");
             product.setPrice(randomPrice(250, 1600));
-            product.setStockQuantity(random.nextInt(201));
+            product.setStockQuantity(DEMO_STOCK);
             product.setCategory(category);
             product.setBrand(brand);
             product.setWeightKg(randomDecimal(0.14, 0.24, 3));
@@ -186,7 +203,7 @@ public class CatalogDataSeeder implements CommandLineRunner {
             saveNumberSpec(product, specsByKey.get("ram_gb"), pick(PHONE_RAM_GB));
             saveNumberSpec(product, specsByKey.get("display_size_in"), pick(PHONE_DISPLAY_IN));
 
-            saveDefaultImage(product);
+            saveDefaultImage(product, PHONE_IMAGES);
         }
     }
 
@@ -234,10 +251,12 @@ public class CatalogDataSeeder implements CommandLineRunner {
         productSpecValueRepository.save(specValue);
     }
 
-    private void saveDefaultImage(Product product) {
+    // cycles through the photos by product id (not `random`, so the seeded prices/specs stay the same)
+    private void saveDefaultImage(Product product, List<String> images) {
         ProductImage image = new ProductImage();
         image.setProduct(product);
-        image.setUrl("https://picsum.photos/seed/" + product.getProductId() + "/600/400");
+        String path = images.get((int) (product.getProductId() % images.size()));
+        image.setUrl(IMAGE_CDN + path + "/thumbnail.webp");
         image.setDisplayOrder(0);
         productImageRepository.save(image);
     }
