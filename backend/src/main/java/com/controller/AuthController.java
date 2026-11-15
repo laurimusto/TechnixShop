@@ -1,18 +1,17 @@
 package com.controller;
 
 
-import com.dto.user.AuthResponseDTO;
-import com.dto.user.GoogleLoginRequestDTO;
-import com.dto.user.LoginRequestDTO;
-import com.dto.user.LoginResponseDTO;
-import com.dto.user.RegisterRequestDTO;
+import com.dto.user.*;
 import com.exception.CaptchaVerificationException;
 import com.exception.InvalidCredentialsException;
 import com.security.CaptchaVerifier;
 import com.security.GoogleTokenVerifier;
 import com.security.GoogleTokenVerifier.GoogleUser;
 import com.service.AuthService;
+import com.service.PasswordResetService;
+import com.exception.InvalidRefreshTokenException;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -29,14 +28,16 @@ public class AuthController {
     private final AuthService authService;
     private final CaptchaVerifier captchaVerifier;
     private final GoogleTokenVerifier googleTokenVerifier;
+    private final PasswordResetService passwordResetService;
 
     @Value("${refresh.expiration}")
     private long refreshExpirationMs;
 
-    public AuthController(AuthService authService, CaptchaVerifier captchaVerifier, GoogleTokenVerifier googleTokenVerifier) {
+    public AuthController(AuthService authService, CaptchaVerifier captchaVerifier, GoogleTokenVerifier googleTokenVerifier, PasswordResetService passwordResetService) {
         this.authService = authService;
         this.captchaVerifier = captchaVerifier;
         this.googleTokenVerifier = googleTokenVerifier;
+        this.passwordResetService = passwordResetService;
     }
 
     @PostMapping("/register")
@@ -87,8 +88,19 @@ public class AuthController {
                 .body(body);
     }
 
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(@RequestBody @Valid ForgotPasswordRequestDTO request) {
+        passwordResetService.requestReset(request.email());
+
+        // always the same empty 202, whether the email exists (no user enumeration)
+        return ResponseEntity.accepted().build();
+    }
+
     @PostMapping("/refresh")
-    public ResponseEntity<AuthResponseDTO> refresh(@CookieValue("refreshToken") String rawRefreshToken) {
+    public ResponseEntity<AuthResponseDTO> refresh(@CookieValue(value = "refreshToken", required = false) String rawRefreshToken) {
+        if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+            throw new InvalidRefreshTokenException("Refresh token is missing");
+        }
         LoginResponseDTO result = authService.refresh(rawRefreshToken);
 
         ResponseCookie cookie = buildRefreshCookie(result.refreshToken(), Duration.ofMillis(refreshExpirationMs));
@@ -102,12 +114,25 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestHeader("Authorization") String authorizationHeader,
-                                        @CookieValue(value = "refreshToken", required = false) String rawRefreshToken) {
-        String accessToken = authorizationHeader.substring(7); // strip "Bearer "
-        Claims claims = authService.parseToken(accessToken);
+    public ResponseEntity<Void> logout(@RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+                                       @CookieValue(value = "refreshToken", required = false) String rawRefreshToken) {
+        // Logout must always succeed in ending the session, even when the access token is
+        // missing, malformed or expired: such a token can't be used anyway, so there is nothing
+        // to denylist - but the refresh token still has to be revoked and the cookie cleared.
+        Claims claims = null;
+        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+            try {
+                claims = authService.parseToken(authorizationHeader.substring(7)); // strip "Bearer "
+            } catch (JwtException | IllegalArgumentException e) {
+                // unusable access token: fall through and revoke only the refresh token
+            }
+        }
 
-        authService.logout(claims.getId(), claims.getExpiration(), rawRefreshToken);
+        if (claims != null) {
+            authService.logout(claims.getId(), claims.getExpiration(), rawRefreshToken);
+        } else {
+            authService.logout(null, null, rawRefreshToken);
+        }
 
         ResponseCookie expiredCookie = buildRefreshCookie("", Duration.ZERO);
 

@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -30,4 +32,7 @@ public class User {
 
     @Column(unique = true)
     private String googleSub;
+
+    // access tokens issued before this moment are rejected; null = password never changed
+    private Instant passwordChangedAt;
 }
