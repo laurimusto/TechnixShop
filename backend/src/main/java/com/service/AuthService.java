@@ -2,21 +2,19 @@ package com.service;
 
 import com.dto.user.LoginResponseDTO;
 import com.dto.user.RegisterRequestDTO;
-
 import com.entity.RefreshToken;
 import com.entity.User;
 import com.exception.*;
 import com.repository.RefreshTokenRepository;
 import com.security.AccessTokenDenylist;
 import com.security.GoogleTokenVerifier.GoogleUser;
+import com.security.TokenHashing;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
-import lombok.extern.java.Log;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,11 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,9 +32,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static com.enums.Role.USER;
 
+@Slf4j //generates logger
 @Service
 public class AuthService {
-    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
@@ -49,6 +42,7 @@ public class AuthService {
     private final AccessTokenDenylist accessTokenDenylist;
     private final TransactionTemplate requiresNewTransactionTemplate;
     private final String dummyPasswordHash;
+
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -179,13 +173,9 @@ public class AuthService {
         Date expiryDate = new Date(now.getTime() + refreshExpirationMs);
 
 
-        SecureRandom secureRandom = new SecureRandom(); //generate raw, random token string.
-        byte[] randomBytes = new byte[64];
-        secureRandom.nextBytes(randomBytes);
-        String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
-
-        //hash that raw string deterministically. The same input always produces the same output, which lets you look up refreshtoken later.
-        String tokenHash = hashToken(rawToken);
+        String rawToken = TokenHashing.generateRawToken();
+        //hash that raw string deterministically. The same input always produces the same output, which lets you look up refresh token later.
+        String tokenHash = TokenHashing.sha256(rawToken);
 
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setTokenHash(tokenHash);
@@ -203,18 +193,18 @@ public class AuthService {
     // the first would make every rejected request hold one DB connection while waiting for
     // another, so a burst of replayed tokens could exhaust the connection pool.
     public LoginResponseDTO refresh(String rawRefreshToken) {
-        String hashRefreshToken = hashToken(rawRefreshToken);
+        String hashRefreshToken = TokenHashing.sha256(rawRefreshToken);
         AtomicReference<UUID> reusedFamilyId = new AtomicReference<>();
 
         // transaction 1: validate the token and rotate it
         LoginResponseDTO result = requiresNewTransactionTemplate.execute(status -> {
             RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(hashRefreshToken).orElseThrow(() -> new InvalidRefreshTokenException("Refresh token not found in database!"));
 
-            if(refreshToken.isRevoked()){ //check if its revoked
+            if (refreshToken.isRevoked()) { //check if its revoked
                 reusedFamilyId.set(refreshToken.getFamilyId());
                 return null;
             }
-            if(refreshToken.getExpiryDate().before(new Date())) { //check expiry date
+            if (refreshToken.getExpiryDate().before(new Date())) { //check expiry date
                 throw new InvalidRefreshTokenException("refreshToken is expired!");
             }
 
@@ -252,26 +242,12 @@ public class AuthService {
         }
 
         if (rawRefreshToken != null) {
-            String tokenHash = hashToken(rawRefreshToken);
+            String tokenHash = TokenHashing.sha256(rawRefreshToken);
             refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(refreshToken -> {
                 refreshToken.setRevoked(true);
                 refreshTokenRepository.save(refreshToken);
             });
         }
-    }
-
-    private String hashToken(String rawToken) {
-        String tokenHash;
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
-            tokenHash = Base64.getEncoder().encodeToString(hashBytes);
-        } catch (NoSuchAlgorithmException e) {
-            throw new TokenGenerationException("Failed to hash refresh token", e);
-        }
-
-        return tokenHash;
-
     }
 }
 
