@@ -48,6 +48,7 @@ public abstract class IntegrationTestBase {
         registry.add("jwt.secret", () -> "integration-test-only-secret-key-that-is-long-enough-for-hs256");
         registry.add("jwt.expiration", () -> "1800000");
         registry.add("refresh.expiration", () -> "432000000");
+        registry.add("reset.expiration", () -> "1800000");
         registry.add("app.frontend.url", () -> "http://localhost:3000");
         registry.add("cloudinary.cloud-name", () -> "test");
         registry.add("cloudinary.api-key", () -> "test");

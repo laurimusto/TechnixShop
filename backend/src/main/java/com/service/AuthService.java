@@ -43,7 +43,6 @@ public class AuthService {
     private final TransactionTemplate requiresNewTransactionTemplate;
     private final String dummyPasswordHash;
 
-
     @Value("${jwt.secret}")
     private String jwtSecret;
 
@@ -155,7 +154,7 @@ public class AuthService {
     }
 
     public Optional<User> authenticate(String email, String password) {
-        Optional<User> user = userRepository.findByEmail(email);
+        Optional<User> user = userRepository.findByEmailIgnoreCase(email);
         String storedHash = user.map(User::getPassword).orElse(null);
         // Always pay the bcrypt cost, even when there is no account (or no password, for
         // Google-only accounts) - otherwise a fast "no" reveals that the email isn't registered.
