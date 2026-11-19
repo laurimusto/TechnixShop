@@ -1,6 +1,7 @@
 package com.service;
 
 import com.dto.user.LoginResponseDTO;
+import com.dto.user.ProfileMapper;
 import com.dto.user.RegisterRequestDTO;
 import com.entity.RefreshToken;
 import com.entity.User;
@@ -82,6 +83,9 @@ public class AuthService {
         user.setRole(USER);
         String hashedPassword = bCryptPasswordEncoder.encode(request.password());
         user.setPassword(hashedPassword);
+        if (request.profile() != null) {
+            ProfileMapper.applyTo(request.profile(), user);
+        }
         User savedUser = userRepository.save(user);
         String token = generateToken(savedUser);
         String refreshToken = createRefreshToken(savedUser, UUID.randomUUID());

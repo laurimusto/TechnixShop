@@ -10,7 +10,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -37,11 +40,22 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // TEMPORARY: everything permitted for local dev/testing - remove before review/deployment.
-                // Target model once admin/order features exist: public browsing/search for everyone,
-                // an admin panel gated to logged-in ADMIN users, and placing an order requires login
-                // (Project 2 scope).
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+                // Deny by default: only the routes listed here are public, everything else needs a
+                // valid access token. A new endpoint is therefore protected unless someone opens it on purpose.
+                .authorizeHttpRequests(auth -> auth
+                        // sign-in flows: the caller has no access token yet
+                        // (/refresh uses the HttpOnly cookie, /logout must work even with an expired token)
+                        .requestMatchers(HttpMethod.POST,
+                                "/register", "/login", "/googlelogin", "/refresh", "/logout",
+                                "/forgot-password", "/reset-password").permitAll()
+                        // catalog browsing is public
+                        .requestMatchers(HttpMethod.GET, "/categories", "/search").permitAll()
+                        // Spring forwards unhandled errors here; blocking it would turn every error into 401
+                        .requestMatchers("/error").permitAll()
+                        .anyRequest().authenticated())
+                // with form/basic login disabled Spring would answer 403; 401 is the correct
+                // "you are not logged in" status, and it's what tells the frontend to refresh
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
 
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 

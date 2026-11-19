@@ -96,6 +96,13 @@ public class AuthController {
         return ResponseEntity.accepted().build();
     }
 
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(@RequestBody @Valid ResetPasswordRequestDTO request) {
+        passwordResetService.resetPassword(request);
+        // 204: it worked, nothing to send back. Failures are thrown and turned into 400s by GlobalExceptionHandler.
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponseDTO> refresh(@CookieValue(value = "refreshToken", required = false) String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {

@@ -1,0 +1,54 @@
+# Mirrors the root .gitignore. "**/" is needed because, unlike .gitignore,
+# a .dockerignore pattern without it only matches at the top of the build context.
+
+# IntelliJ IDEA
+**/.idea
+**/*.iml
+**/*.iws
+
+# OS files
+**/.DS_Store
+**/Thumbs.db
+
+# Logs
+**/*.log
+
+# Build directories
+**/target/
+**/build/
+**/out/
+
+# Maven
+**/dependency-reduced-pom.xml
+
+# Gradle
+**/.gradle/
+
+# Environment files (NEXT_PUBLIC_* values come in as build args instead)
+**/.env
+**/.env*.local
+
+# Compiled files
+**/*.class
+
+# Package files
+**/*.jar
+**/*.war
+**/*.ear
+
+# IntelliJ caches
+**/*.cache
+**/*.tmp
+
+# VS Code
+**/.vscode/
+**/node_modules/
+**/.next/
+**/*.tsbuildinfo
+
+# Private notes
+**/CLAUDE.md
+**/AGENTS.md
+**/docs/
+**/brief.md
+**/task.md

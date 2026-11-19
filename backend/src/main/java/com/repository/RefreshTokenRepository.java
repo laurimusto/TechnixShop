@@ -26,4 +26,9 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Query("UPDATE RefreshToken r SET r.revoked = true WHERE r.tokenId = :tokenId AND r.revoked = false")
     int revokeIfActive(Long tokenId);
 
+    // One UPDATE for every token the user has - used after a password reset to end all sessions.
+    @Modifying
+    @Query("UPDATE RefreshToken r SET r.revoked = true WHERE r.user = :user")
+    void revokeAllByUser(User user);
+
 }
