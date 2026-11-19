@@ -19,15 +19,18 @@ const iconProps = {
   "aria-hidden": true,
 };
 
-const inputClass =
-  "w-full rounded-xl bg-field px-3 py-2.5 text-sm text-slate-100 ring-1 ring-white/10 placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent";
+const userIcon = (
+  <>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+  </>
+);
 
 export default function Header() {
   const router = useRouter();
-  const { email, login, logout, cartCount } = useShop();
+  const { email, logout, cartCount } = useShop();
   const [accountOpen, setAccountOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
-  const [error, setError] = useState("");
   const accountRef = useRef<HTMLDivElement>(null);
 
   // close the account popover on outside click or Escape
@@ -51,14 +54,6 @@ export default function Header() {
     e.preventDefault();
     const q = String(new FormData(e.currentTarget).get("q") ?? "").trim();
     router.push(q ? `/?q=${encodeURIComponent(q)}` : "/");
-  }
-
-  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const message = await login(String(form.get("email")), String(form.get("password")));
-    setError(message ?? "");
-    if (!message) setAccountOpen(false);
   }
 
   return (
@@ -90,27 +85,32 @@ export default function Header() {
         </form>
 
         <div className="ml-auto flex items-center gap-1 sm:ml-0">
-          <div ref={accountRef} className="relative">
-            <button
-              onClick={() => setAccountOpen((open) => !open)}
-              aria-expanded={accountOpen}
-              className={`${btn.ghost} px-3 py-2 text-sm`}
-            >
-              <svg {...iconProps}>
-                <circle cx="12" cy="8" r="4" />
-                <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
-              </svg>
-              <span className="hidden max-w-40 truncate sm:inline">{email ?? "Sign in"}</span>
-              <span className="sr-only sm:hidden">{email ? "Account" : "Sign in"}</span>
-            </button>
+          {email ? (
+            // logged in: account button opens a small popover with the email and Log out
+            <div ref={accountRef} className="relative">
+              <button
+                onClick={() => setAccountOpen((open) => !open)}
+                aria-expanded={accountOpen}
+                className={`${btn.ghost} px-3 py-2 text-sm`}
+              >
+                <svg {...iconProps}>{userIcon}</svg>
+                <span className="hidden max-w-40 truncate sm:inline">{email}</span>
+                <span className="sr-only sm:hidden">Account</span>
+              </button>
 
-            {accountOpen && (
-              <div className="animate-pop-in absolute right-0 z-10 mt-2 w-72 rounded-2xl bg-raised p-5 text-sm text-slate-200 shadow-2xl shadow-black/50 ring-1 ring-white/10">
-                {email ? (
+              {accountOpen && (
+                <div className="animate-pop-in absolute right-0 z-10 mt-2 w-72 rounded-2xl bg-raised p-5 text-sm text-slate-200 shadow-2xl shadow-black/50 ring-1 ring-white/10">
                   <div className="flex flex-col gap-4">
                     <p className="truncate">
                       Signed in as <span className="font-medium text-white">{email}</span>
                     </p>
+                    <Link
+                      href="/account"
+                      onClick={() => setAccountOpen(false)}
+                      className={`${btn.primary} px-4 py-2.5`}
+                    >
+                      My account
+                    </Link>
                     <button
                       onClick={() => logout().then(() => setAccountOpen(false))}
                       className={`${btn.secondary} px-4 py-2.5`}
@@ -118,50 +118,17 @@ export default function Header() {
                       Log out
                     </button>
                   </div>
-                ) : (
-                  <form onSubmit={handleLogin} className="flex flex-col gap-3">
-                    <p className="text-base font-semibold text-white">Welcome back</p>
-                    <input
-                      name="email"
-                      type="email"
-                      required
-                      aria-label="Email"
-                      placeholder="Email"
-                      autoComplete="email"
-                      className={inputClass}
-                    />
-                    <input
-                      name="password"
-                      type="password"
-                      required
-                      aria-label="Password"
-                      placeholder="Password"
-                      autoComplete="current-password"
-                      className={inputClass}
-                    />
-                    {error && (
-                      <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-red-200 ring-1 ring-red-500/30">
-                        {error}
-                      </p>
-                    )}
-                    <button
-                      type="submit"
-                      className={`${btn.primary} px-4 py-2.5`}
-                    >
-                      Log in
-                    </button>
-                    <Link
-                      href="/api"
-                      onClick={() => setAccountOpen(false)}
-                      className="text-center text-muted underline-offset-4 hover:text-white hover:underline"
-                    >
-                      Create an account or sign in with Google
-                    </Link>
-                  </form>
-                )}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            // logged out: a plain link - the /login page links on to /register
+            <Link href="/login" className={`${btn.ghost} px-3 py-2 text-sm`}>
+              <svg {...iconProps}>{userIcon}</svg>
+              <span className="hidden sm:inline">Log in / Register</span>
+              <span className="sr-only sm:hidden">Log in or register</span>
+            </Link>
+          )}
 
           <button
             onClick={() => setCartOpen(true)}

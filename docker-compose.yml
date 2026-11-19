@@ -1,5 +1,8 @@
 name: technix
 
+# One command starts everything:  docker compose up --build
+# All settings come from the .env file next to this one (copy .env.example to .env).
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -9,14 +12,14 @@ services:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "5432:5432"
+      - "5432:5432" # only needed when running the backend outside Docker
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d technix"] # runs inside the container, so it still uses 5432 internally
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d technix"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   mailpit:
     image: axllent/mailpit
@@ -24,6 +27,35 @@ services:
     ports:
       - "1025:1025" # SMTP, the backend sends mail here
       - "8025:8025" # web UI to view caught emails
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # inside the compose network, services reach each other by service name, not localhost
+      DB_URL: jdbc:postgresql://postgres:5432/technix
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

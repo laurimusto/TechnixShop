@@ -9,37 +9,7 @@ const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? "";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
 type AuthResponse = { token: string; email: string; id: number };
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (params: {
-            client_id: string;
-            callback: (response: { credential: string }) => void;
-          }) => void;
-          renderButton: (
-            container: HTMLElement,
-            options: { theme?: string; size?: string; text?: string },
-          ) => void;
-        };
-      };
-    };
-    grecaptcha?: {
-      ready: (cb: () => void) => void;
-      render: (
-        container: HTMLElement,
-        params: {
-          sitekey: string;
-          callback: (token: string) => void;
-          "expired-callback": () => void;
-        },
-      ) => number;
-      reset: (widgetId?: number) => void;
-    };
-  }
-}
+// window.google / window.grecaptcha types are declared in ../auth-widgets.tsx
 
 export default function ApiTestConsole() {
   // session is shared with the shop header; the access token is kept in memory only

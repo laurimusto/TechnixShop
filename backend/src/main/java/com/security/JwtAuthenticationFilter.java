@@ -1,6 +1,7 @@
 package com.security;
 
 
+import com.repository.UserRepository;
 import com.service.AuthService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -16,16 +17,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final AuthService authService;
     private final AccessTokenDenylist accessTokenDenylist;
+    private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(AuthService authService, AccessTokenDenylist accessTokenDenylist) {
+    public JwtAuthenticationFilter(AuthService authService, AccessTokenDenylist accessTokenDenylist, UserRepository userRepository) {
         this.authService = authService;
         this.accessTokenDenylist = accessTokenDenylist;
+        this.userRepository = userRepository;
     }
 
     // /logout handles its own token parsing: rejecting an expired access token here would
@@ -58,6 +62,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
             String userId = claims.getSubject();
+
+            // A password reset ends every session: tokens issued before the change are rejected,
+            // even though their signature and expiry are still valid.
+            Instant issuedAt = claims.getIssuedAt().toInstant();
+            boolean issuedBeforePasswordChange = userRepository.findPasswordChangedAtByUserId(Long.parseLong(userId))
+                    .map(issuedAt::isBefore)
+                    .orElse(false);
+            if (issuedBeforePasswordChange) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("Session ended after password change");
+                return;
+            }
+
             String userRole = claims.get("role", String.class);
 
             GrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + userRole);

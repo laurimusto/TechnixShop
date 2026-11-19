@@ -2,7 +2,7 @@
 
 Scope: auth domain (users, refresh tokens, password reset tokens) and catalog domain
 (products, categories, brands, product images, filterable specs). Project 2/3 entities
-(cart, order, customer) are intentionally excluded. CAPTCHA and 2FA need no tables of
+(cart, order) are intentionally excluded. CAPTCHA and 2FA need no tables of
 their own at this stage; Google sign-in is stored as a column on `users` — see "Google
 sign-in" and "Excluded" below.
 
@@ -20,6 +20,14 @@ erDiagram
         varchar password "BCrypt hash, nullable (null = Google-only account)"
         varchar role "not null"
         varchar google_sub "unique, nullable, Google ID token sub claim"
+        timestamptz password_changed_at "nullable, older access tokens are rejected"
+        varchar first_name "nullable"
+        varchar last_name "nullable"
+        varchar phone "nullable"
+        varchar street "nullable"
+        varchar postal_code "nullable"
+        varchar city "nullable"
+        varchar country "nullable"
     }
     REFRESH_TOKENS {
         bigint token_id PK
@@ -144,11 +152,28 @@ handle it.
 - Existing password accounts are never auto-linked to a Google identity, because
   registration doesn't prove email ownership (see `AuthService.googleLogin`).
 
+## Password change time (V4 migration)
+
+- `users.password_changed_at` records when the password last changed. The JWT filter rejects
+  any access token whose `iat` (issued-at) is older, so a password reset ends every existing
+  session, not only the refresh tokens. `NULL` = never changed.
+
+## User profile (V5 migration)
+
+- `first_name`, `last_name`, `phone`, `street`, `postal_code`, `city` and `country` live directly
+  on `users`. They are all **nullable**: registration only needs an email (GDPR data
+  minimisation). Checkout (Project 2) will require them; `User.hasDetailsForOrdering()` already
+  checks this.
+- The separate `Customer` placeholder entity was dropped. It would have been a 1:1 copy of
+  `users`, and a 1:1 table only pays off when the data has its own lifecycle. Orders will instead
+  **copy** the delivery address at order time (snapshot pattern), so changing your profile later
+  never rewrites old orders.
+
 ## Excluded from this schema
 
 - **CAPTCHA** — stateless, verified server-side per request, no persistence needed.
-- **2FA** — would need a `totp_secret` column on `users`; out of scope for now.
-- **Customer / Order / ShoppingCart** — Project 2/3 scope.
+- **2FA** — not built yet; will need a `totp_secret` (encrypted) and a `totp_enabled` flag on `users`.
+- **Order / ShoppingCart** — Project 2/3 scope.
 
 ## DBML (for dbdiagram.io)
 
@@ -159,6 +184,14 @@ Table users {
   password varchar [null, note: 'BCrypt hash; null = Google-only account']
   role varchar [not null]
   google_sub varchar [unique, null, note: 'Google ID token sub claim']
+  password_changed_at timestamptz [null, note: 'access tokens issued before this are rejected']
+  first_name varchar(50) [null]
+  last_name varchar(50) [null]
+  phone varchar(20) [null]
+  street varchar(100) [null]
+  postal_code varchar(20) [null]
+  city varchar(50) [null]
+  country varchar(56) [null]
 }
 
 Table refresh_tokens {

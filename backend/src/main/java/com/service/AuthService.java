@@ -1,6 +1,7 @@
 package com.service;
 
 import com.dto.user.LoginResponseDTO;
+import com.dto.user.ProfileMapper;
 import com.dto.user.RegisterRequestDTO;
 import com.entity.RefreshToken;
 import com.entity.User;
@@ -43,7 +44,6 @@ public class AuthService {
     private final TransactionTemplate requiresNewTransactionTemplate;
     private final String dummyPasswordHash;
 
-
     @Value("${jwt.secret}")
     private String jwtSecret;
 
@@ -83,6 +83,9 @@ public class AuthService {
         user.setRole(USER);
         String hashedPassword = bCryptPasswordEncoder.encode(request.password());
         user.setPassword(hashedPassword);
+        if (request.profile() != null) {
+            ProfileMapper.applyTo(request.profile(), user);
+        }
         User savedUser = userRepository.save(user);
         String token = generateToken(savedUser);
         String refreshToken = createRefreshToken(savedUser, UUID.randomUUID());
@@ -155,7 +158,7 @@ public class AuthService {
     }
 
     public Optional<User> authenticate(String email, String password) {
-        Optional<User> user = userRepository.findByEmail(email);
+        Optional<User> user = userRepository.findByEmailIgnoreCase(email);
         String storedHash = user.map(User::getPassword).orElse(null);
         // Always pay the bcrypt cost, even when there is no account (or no password, for
         // Google-only accounts) - otherwise a fast "no" reveals that the email isn't registered.

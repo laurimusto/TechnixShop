@@ -35,4 +35,23 @@ public class User {
 
     // access tokens issued before this moment are rejected; null = password never changed
     private Instant passwordChangedAt;
+
+    // Profile - all optional (see V5 migration). Strings, because none of them are ever used for maths.
+    private String firstName;
+    private String lastName;
+    private String phone;
+    private String street;
+    private String postalCode;
+    private String city;
+    private String country;
+
+    // Prebuilt for Project 2: checkout will refuse to place an order until this is true.
+    public boolean hasDetailsForOrdering() {
+        return isFilled(firstName) && isFilled(lastName) && isFilled(phone)
+                && isFilled(street) && isFilled(postalCode) && isFilled(city) && isFilled(country);
+    }
+
+    private static boolean isFilled(String value) {
+        return value != null && !value.isBlank();
+    }
 }

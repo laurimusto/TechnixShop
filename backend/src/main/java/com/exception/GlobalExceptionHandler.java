@@ -117,6 +117,13 @@ public class GlobalExceptionHandler {
         return createErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
+    // 400, not 401: the client sent a bad link, nobody is "logged in" here to be unauthorized
+    @ExceptionHandler(InvalidResetTokenException.class)
+    public ResponseEntity<ErrorResponseDTO> handleInvalidResetToken(InvalidResetTokenException ex) {
+        log.info("Invalid password reset token: {}", ex.getMessage());
+        return createErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
     @ExceptionHandler(CaptchaVerificationException.class)
     public ResponseEntity<ErrorResponseDTO> handleCaptchaFailed(CaptchaVerificationException ex) {
         log.info("CAPTCHA verification failed: {}", ex.getMessage());

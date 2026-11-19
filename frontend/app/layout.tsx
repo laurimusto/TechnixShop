@@ -21,7 +21,7 @@ const FOOTER_LINKS = [
     title: "Shop",
     links: [
       { label: "All products", href: "/" },
-      { label: "Create account", href: "/api" },
+      { label: "Create account", href: "/register" },
     ],
   },
   {

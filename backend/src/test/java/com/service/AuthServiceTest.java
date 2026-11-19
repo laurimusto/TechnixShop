@@ -336,7 +336,7 @@ class AuthServiceTest {
     @DisplayName("login: valid credentials return both tokens")
     void login_happyPath() {
         User user = testUser();
-        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(user));
         when(bCryptPasswordEncoder.matches("password", "hashed-password")).thenReturn(true);
 
         LoginResponseDTO result = authService.login("test@example.com", "password");
@@ -350,7 +350,7 @@ class AuthServiceTest {
     @DisplayName("login: wrong password is rejected")
     void login_rejectsWrongPassword() {
         User user = testUser();
-        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(user));
         when(bCryptPasswordEncoder.matches("wrong-password", "hashed-password")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login("test@example.com", "wrong-password"))
@@ -360,7 +360,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("login: unknown email is rejected")
     void login_rejectsUnknownEmail() {
-        when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("unknown@example.com")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.login("unknown@example.com", "password"))
                 .isInstanceOf(InvalidCredentialsException.class);
@@ -387,7 +387,7 @@ class AuthServiceTest {
     @DisplayName("authenticate: correct email and password returns the user")
     void authenticate_correctCredentialsReturnsUser() {
         User user = testUser();
-        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(user));
         when(bCryptPasswordEncoder.matches("password", "hashed-password")).thenReturn(true);
 
         Optional<User> result = authService.authenticate("test@example.com", "password");
@@ -399,7 +399,7 @@ class AuthServiceTest {
     @DisplayName("authenticate: wrong password returns empty, not an exception")
     void authenticate_wrongPasswordReturnsEmpty() {
         User user = testUser();
-        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(user));
         when(bCryptPasswordEncoder.matches("wrong", "hashed-password")).thenReturn(false);
 
         assertThat(authService.authenticate("test@example.com", "wrong")).isEmpty();
@@ -408,7 +408,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("authenticate: unknown email returns empty, not an exception")
     void authenticate_unknownEmailReturnsEmpty() {
-        when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("unknown@example.com")).thenReturn(Optional.empty());
 
         assertThat(authService.authenticate("unknown@example.com", "password")).isEmpty();
     }
