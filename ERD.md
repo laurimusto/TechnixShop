@@ -1,10 +1,10 @@
 # Entity Relationship Diagram — Project 1 (Foundation)
 
-Scope: auth domain (users, refresh tokens, password reset tokens) and catalog domain
-(products, categories, brands, product images, filterable specs). Project 2/3 entities
-(cart, order) are intentionally excluded. CAPTCHA and 2FA need no tables of
-their own at this stage; Google sign-in is stored as a column on `users` — see "Google
-sign-in" and "Excluded" below.
+Scope: auth domain (users, refresh tokens, password reset tokens, email change tokens) and
+catalog domain (products, categories, brands, product images, filterable specs). Project 2/3
+entities (cart, order) are intentionally excluded. CAPTCHA needs no table; Google sign-in and
+2FA are stored as columns on `users` — see "Google sign-in", "Two-factor authentication" and
+"Excluded" below.
 
 Catalog scope: Technix, an electronics retailer selling Laptops and Phones (2 top-level
 categories). Category-specific filterable specs (RAM, GPU, CPU, display size) use a
@@ -28,6 +28,9 @@ erDiagram
         varchar postal_code "nullable"
         varchar city "nullable"
         varchar country "nullable"
+        varchar totp_secret "nullable, AES-GCM encrypted 2FA secret"
+        boolean totp_enabled "not null, default false"
+        bigint totp_last_used_step "nullable, blocks code replay"
     }
     REFRESH_TOKENS {
         bigint token_id PK
@@ -43,6 +46,13 @@ erDiagram
         bigint user_id FK
         timestamp expiry_date "not null"
         boolean used "not null, default false"
+    }
+    EMAIL_CHANGE_TOKENS {
+        bigint token_id PK
+        varchar token_hash "unique, not null"
+        bigint user_id FK
+        varchar new_email "not null"
+        timestamp expiry_date "not null"
     }
     CATEGORIES {
         bigint category_id PK
@@ -97,6 +107,7 @@ erDiagram
 
     USERS ||--o{ REFRESH_TOKENS : "has"
     USERS ||--o{ PASSWORD_RESET_TOKENS : "requests"
+    USERS ||--o{ EMAIL_CHANGE_TOKENS : "requests"
     CATEGORIES ||--o{ CATEGORIES : "parent of"
     CATEGORIES ||--o{ PRODUCTS : "classifies"
     BRANDS ||--o{ PRODUCTS : "makes"
@@ -113,6 +124,7 @@ erDiagram
 |---|---|---|
 | User → RefreshToken | 1 user : 0..N tokens | Mandatory on token side (a token always has a user); in practice 1..N on the user side since `register()`/`login()` issue one immediately |
 | User → PasswordResetToken | 1 user : 0..N tokens | Mandatory on token side; optional on user side (most users never request a reset) |
+| User → EmailChangeToken | 1 user : 0..1 tokens in practice (0..N in the schema) | Mandatory on token side; optional on user side. A new request deletes the older one, so only the newest link works |
 | Category → Category (self-ref) | 1 parent : 0..N children | Optional — root categories have `parent_id = null` |
 | Category → Product | 1 category : 0..N products | Mandatory on product side; optional on category side (a category can exist with zero products) |
 | Brand → Product | 1 brand : 0..N products | Same shape as Category → Product |
@@ -135,6 +147,7 @@ handle it.
 - `products(name)` — GIN/trigram (`pg_trgm`) index for search suggestions
 - `categories(parent_id)` — hierarchy traversal
 - `refresh_tokens(family_id)` — required by the bulk `revokeAllByFamilyId` update
+- `email_change_tokens(user_id)` — `deleteByUser` runs on every new email-change request
 - `product_spec_values(spec_id, value_number)` — numeric spec range filters (RAM, display size)
 - `product_spec_values(spec_id, value_text)` — text/enum spec filters (CPU, GPU)
 
@@ -169,10 +182,32 @@ handle it.
   **copy** the delivery address at order time (snapshot pattern), so changing your profile later
   never rewrites old orders.
 
+## Two-factor authentication (V6 migration)
+
+- Columns on `users`, not a separate table: each user has at most one authenticator, and the
+  data has no lifecycle of its own.
+- `totp_secret` is **encrypted**, not hashed: to check a code, the server has to read the secret
+  back and compute `HMAC(secret, time)`. A hash can't be read back.
+- `totp_enabled` stays false while setup is pending (a secret exists, but no code has confirmed it yet).
+- `totp_last_used_step` stores the 30-second step of the last accepted code. A code is only
+  accepted for a later step, so the same code can't be used twice.
+- Login challenges and failed-attempt counters live in memory (short-lived, no need for durability).
+
+## Email change tokens (V7 migration)
+
+- A pending email change is stored in its own table, not on `users`, because it has its own
+  lifecycle: it is created, it expires, and it is deleted once used. `users.email` only changes
+  when the link is confirmed.
+- `token_hash` = SHA-256 of the link token (same pattern as password reset), so a database
+  leak doesn't expose working links.
+- `new_email` is not unique: the address is checked when the change is requested and again
+  when it is confirmed, because someone may register it in between.
+- `ON DELETE CASCADE`: deleting the account removes pending requests in the same transaction.
+
 ## Excluded from this schema
 
 - **CAPTCHA** — stateless, verified server-side per request, no persistence needed.
-- **2FA** — not built yet; will need a `totp_secret` (encrypted) and a `totp_enabled` flag on `users`.
+- **2FA recovery codes** — not built yet; would be a `user_recovery_codes` table (1 user : 0..N hashed codes).
 - **Order / ShoppingCart** — Project 2/3 scope.
 
 ## DBML (for dbdiagram.io)
@@ -192,6 +227,9 @@ Table users {
   postal_code varchar(20) [null]
   city varchar(50) [null]
   country varchar(56) [null]
+  totp_secret varchar(255) [null, note: 'AES-GCM encrypted; null = 2FA never set up']
+  totp_enabled boolean [not null, default: false]
+  totp_last_used_step bigint [null, note: 'last accepted 30 s step; blocks replay']
 }
 
 Table refresh_tokens {
@@ -213,6 +251,18 @@ Table password_reset_tokens {
   user_id bigint [not null]
   expiry_date timestamp [not null]
   used boolean [not null, default: false]
+}
+
+Table email_change_tokens {
+  token_id bigint [pk, increment]
+  token_hash varchar [unique, not null]
+  user_id bigint [not null]
+  new_email varchar(255) [not null]
+  expiry_date timestamp [not null]
+
+  indexes {
+    user_id
+  }
 }
 
 Table categories {
@@ -296,6 +346,7 @@ Table product_spec_values {
 
 Ref: refresh_tokens.user_id > users.user_id [delete: cascade]
 Ref: password_reset_tokens.user_id > users.user_id [delete: cascade]
+Ref: email_change_tokens.user_id > users.user_id [delete: cascade]
 Ref: categories.parent_id > categories.category_id [delete: restrict]
 Ref: products.category_id > categories.category_id [delete: restrict]
 Ref: products.brand_id > brands.brand_id [delete: restrict]

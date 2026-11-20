@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.mail.MailSendException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -214,6 +216,27 @@ class PasswordResetIntegrationTest extends IntegrationTestBase {
 
         verify(emailService, timeout(5000)).sendGoogleAccountEmail(email);
         verify(emailService, never()).sendPasswordResetEmail(anyString(), anyString());
+        User user = userRepository.findByEmail(email).orElseThrow();
+        assertThat(passwordResetTokenRepository.findAll())
+                .noneMatch(t -> t.getUser().getUserId().equals(user.getUserId()));
+    }
+
+    @Test
+    @DisplayName("10. mail server down: still 202, and the rollback keeps the previous link valid (no orphan token)")
+    void mailFailure_rollsBackAndKeepsPreviousLink() throws Exception {
+        String email = uniqueEmail();
+        register(email);
+        String firstToken = requestResetAndCaptureToken(email);
+
+        // the second request would normally replace the first token, but its email fails to send
+        doThrow(new MailSendException("mail server down"))
+                .when(emailService).sendPasswordResetEmail(anyString(), anyString());
+        assertThat(forgotPassword(email).getResponse().getStatus()).isEqualTo(202);
+        verify(emailService, timeout(5000).times(2)).sendPasswordResetEmail(eq(email), anyString());
+
+        // the rollback undid "delete old token + save new one", so the first link still works.
+        // (If the async transaction hasn't finished yet, the database makes this wait on its row lock.)
+        assertThat(resetPassword(firstToken, NEW_PASSWORD, NEW_PASSWORD)).isEqualTo(204);
         User user = userRepository.findByEmail(email).orElseThrow();
         assertThat(passwordResetTokenRepository.findAll())
                 .noneMatch(t -> t.getUser().getUserId().equals(user.getUserId()));

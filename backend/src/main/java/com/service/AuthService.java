@@ -10,6 +10,7 @@ import com.repository.RefreshTokenRepository;
 import com.security.AccessTokenDenylist;
 import com.security.GoogleTokenVerifier.GoogleUser;
 import com.security.TokenHashing;
+import com.security.TwoFactorChallengeStore;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
@@ -42,6 +43,8 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final AccessTokenDenylist accessTokenDenylist;
     private final TransactionTemplate requiresNewTransactionTemplate;
+    private final TwoFactorChallengeStore twoFactorChallengeStore;
+    private final TwoFactorService twoFactorService;
     private final String dummyPasswordHash;
 
     @Value("${jwt.secret}")
@@ -53,8 +56,11 @@ public class AuthService {
     @Value("${refresh.expiration}")
     private Long refreshExpirationMs;
 
-    public AuthService(UserRepository userRepository, BCryptPasswordEncoder bCryptPasswordEncoder, RefreshTokenRepository refreshTokenRepository, AccessTokenDenylist accessTokenDenylist, PlatformTransactionManager transactionManager) {
+    public AuthService(UserRepository userRepository, BCryptPasswordEncoder bCryptPasswordEncoder, RefreshTokenRepository refreshTokenRepository, AccessTokenDenylist accessTokenDenylist, PlatformTransactionManager transactionManager,
+                       TwoFactorChallengeStore twoFactorChallengeStore, TwoFactorService twoFactorService) {
         this.userRepository = userRepository;
+        this.twoFactorChallengeStore = twoFactorChallengeStore;
+        this.twoFactorService = twoFactorService;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
         this.refreshTokenRepository = refreshTokenRepository;
         this.accessTokenDenylist = accessTokenDenylist;
@@ -97,9 +103,35 @@ public class AuthService {
         User user = authenticate(email, password)
                 .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
 
+        return issueSessionOrChallenge(user);
+    }
+
+    // Step one (password or Google) is done. With 2FA on, it ends here with a challenge instead of tokens.
+    private LoginResponseDTO issueSessionOrChallenge(User user) {
+        if (user.isTotpEnabled()) {
+            return LoginResponseDTO.twoFactorRequired(twoFactorChallengeStore.start(user.getUserId()));
+        }
+        return issueSession(user);
+    }
+
+    private LoginResponseDTO issueSession(User user) {
         String token = generateToken(user);
         String refreshToken = createRefreshToken(user, UUID.randomUUID());
         return new LoginResponseDTO(token, refreshToken, user.getEmail(), user.getUserId());
+    }
+
+    // Step two: the challenge says WHO passed step one, the code proves they also have the phone.
+    public LoginResponseDTO completeTwoFactorLogin(String challenge, String code) {
+        // 401 like a wrong password: the sign-in as a whole failed and has to start over
+        Long userId = twoFactorChallengeStore.userIdFor(challenge)
+                .orElseThrow(() -> new InvalidCredentialsException("Sign-in expired. Please log in again."));
+
+        twoFactorService.verifyLoginCode(userId, code); // throws on a wrong / replayed code
+        twoFactorChallengeStore.complete(challenge);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InvalidCredentialsException("Sign-in expired. Please log in again."));
+        return issueSession(user);
     }
 
     @Transactional
@@ -111,9 +143,8 @@ public class AuthService {
         User user = userRepository.findByGoogleSub(googleUser.sub())
                 .orElseGet(() -> createGoogleUser(googleUser));
 
-        String token = generateToken(user);
-        String refreshToken = createRefreshToken(user, UUID.randomUUID());
-        return new LoginResponseDTO(token, refreshToken, user.getEmail(), user.getUserId());
+        // Google proved the account, but 2FA is about OUR login: it applies here too
+        return issueSessionOrChallenge(user);
     }
 
     private User createGoogleUser(GoogleUser googleUser) {

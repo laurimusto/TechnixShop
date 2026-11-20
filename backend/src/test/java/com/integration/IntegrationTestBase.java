@@ -55,6 +55,7 @@ public abstract class IntegrationTestBase {
         registry.add("cloudinary.api-secret", () -> "test");
         registry.add("recaptcha.secret", () -> "test");
         registry.add("google.client-id", () -> "test-client-id");
+        registry.add("totp.encryption-key", () -> "integration-test-only-totp-encryption-key");
     }
 
     @Autowired

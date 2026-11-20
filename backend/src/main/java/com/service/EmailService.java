@@ -50,4 +50,30 @@ public class EmailService {
                 + "\nIf you did not request this email, please ignore it.");
         mailSender.send(message);
     }
+
+    // goes to the NEW address: clicking the link proves the user really owns it
+    public void sendEmailChangeConfirmation(String newEmail, String rawToken) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom("no-reply@technix.com");
+        message.setTo(newEmail);
+        message.setSubject("Confirm your new email address");
+        message.setText("Confirm that this is the new email address for your account:\n"
+                + frontend + "/confirm-email?token=" + rawToken
+                + "\nThe link expires in 1 hour."
+                + "\nIf you did not request this, please ignore this email.");
+        mailSender.send(message);
+    }
+
+    // goes to the OLD address: the real owner hears about it even if someone else is using their session
+    public void sendEmailChangeNotice(String oldEmail, String newEmail) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom("no-reply@technix.com");
+        message.setTo(oldEmail);
+        message.setSubject("Email change requested for your account");
+        message.setText("Someone asked to change your account's email to " + newEmail + ".\n"
+                + "Nothing changes until the link sent to that address is clicked.\n"
+                + "If this was not you, change your password now:\n"
+                + frontend + "/account");
+        mailSender.send(message);
+    }
 }

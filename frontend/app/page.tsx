@@ -280,7 +280,9 @@ function ProductGrid({
   const [maxPrice, setMaxPrice] = useState("");
   const [minWeight, setMinWeight] = useState("");
   const [maxWeight, setMaxWeight] = useState("");
-  const [sort, setSort] = useState("");
+  // always a real sort (+ productId as tie-breaker below): without a full order the database may
+  // return equal rows in a different order per query, so a product could show on two pages
+  const [sort, setSort] = useState("price,asc");
   const [page, setPage] = useState(0);
   const [data, setData] = useState<PageResponse | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -295,7 +297,8 @@ function ProductGrid({
       if (maxPrice) params.set("maxPrice", maxPrice);
       if (minWeight) params.set("minWeight", minWeight);
       if (maxWeight) params.set("maxWeight", maxWeight);
-      if (sort) params.set("sort", sort);
+      params.append("sort", sort);
+      params.append("sort", "productId,asc");
       fetch(`${API_BASE}/search?${params.toString()}`)
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -360,7 +363,6 @@ function ProductGrid({
         <label className="flex flex-col gap-1.5 sm:ml-auto">
           <span className="text-xs font-medium text-muted">Sort by</span>
           <select className={fieldClass} value={sort} onChange={(e) => resetToFirstPage(setSort)(e.target.value)}>
-            <option value="">Relevance</option>
             <option value="price,asc">Price: Low to High</option>
             <option value="price,desc">Price: High to Low</option>
             <option value="averageRating,desc">Top rated</option>

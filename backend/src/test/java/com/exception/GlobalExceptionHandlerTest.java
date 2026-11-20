@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mail.MailSendException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -131,6 +132,16 @@ class GlobalExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().message()).isEqualTo("Invalid email format");
+    }
+
+    @Test
+    @DisplayName("MailException maps to 503 with a friendly message, never leaking mail server details")
+    void handlesMailFailure() {
+        ResponseEntity<ErrorResponseDTO> response =
+                handler.handleMailFailure(new MailSendException("Couldn't connect to host smtp.internal:1025"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody().message()).doesNotContain("smtp.internal");
     }
 
     @Test

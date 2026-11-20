@@ -2,6 +2,7 @@ package com.controller;
 
 import com.dto.product.ProductResponseDTO;
 import com.dto.product.ProductSearchCriteriaDTO;
+import com.dto.product.SearchSuggestionDTO;
 import com.service.ProductService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,6 +21,13 @@ public class ProductController {
 
     public ProductController(ProductService productService) {
         this.productService = productService;
+    }
+
+    // Search box dropdown: up to 6 products whose name or brand contains q. Short q -> empty list (200, not 400):
+    // the box calls this while the user is still typing, so "too short" is a normal state, not an error.
+    @GetMapping("/search/suggestions")
+    public List<SearchSuggestionDTO> suggestions(@RequestParam(required = false) String q) {
+        return productService.suggest(q);
     }
 
     @GetMapping("/search")

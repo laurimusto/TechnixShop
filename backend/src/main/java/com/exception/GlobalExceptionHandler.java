@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mail.MailException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -103,6 +104,15 @@ public class GlobalExceptionHandler {
         return createErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage());
     }
 
+    // 503 Service Unavailable: the request was fine, a service we depend on (the mail server) is down,
+    // so retrying later can work. ERROR + stack trace: this needs someone to fix the mail setup.
+    @ExceptionHandler(MailException.class)
+    public ResponseEntity<ErrorResponseDTO> handleMailFailure(MailException ex) {
+        log.error("Email could not be sent", ex);
+        return createErrorResponse(HttpStatus.SERVICE_UNAVAILABLE,
+                "We couldn't send the email right now. Please try again later.");
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponseDTO> handleAll(Exception ex) {
         log.error("Unhandled exception", ex);
@@ -128,6 +138,25 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponseDTO> handleCaptchaFailed(CaptchaVerificationException ex) {
         log.info("CAPTCHA verification failed: {}", ex.getMessage());
         return createErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidEmailChangeTokenException.class)
+    public ResponseEntity<ErrorResponseDTO> handleInvalidEmailChangeToken(InvalidEmailChangeTokenException ex) {
+        log.info("Email change rejected: {}", ex.getMessage());
+        return createErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    // 400, not 401: the frontend's authFetch treats 401 as "access token expired, refresh and retry"
+    @ExceptionHandler(TwoFactorException.class)
+    public ResponseEntity<ErrorResponseDTO> handleTwoFactor(TwoFactorException ex) {
+        log.info("2FA rejected: {}", ex.getMessage());
+        return createErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(TooManyAttemptsException.class)
+    public ResponseEntity<ErrorResponseDTO> handleTooManyAttempts(TooManyAttemptsException ex) {
+        log.warn("Too many attempts: {}", ex.getMessage());
+        return createErrorResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

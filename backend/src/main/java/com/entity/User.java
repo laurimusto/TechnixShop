@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.DynamicUpdate;
 
 import java.time.Instant;
 
@@ -16,6 +17,11 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "users")
+// By default Hibernate's UPDATE writes EVERY column from the loaded object. Then two requests touching
+// different columns overwrite each other with stale values - e.g. enabling 2FA would write the old
+// totp_last_used_step back over the one markTotpStepUsed just set, re-opening the replay hole.
+// @DynamicUpdate makes the UPDATE contain only the columns that actually changed.
+@DynamicUpdate
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,6 +41,12 @@ public class User {
 
     // access tokens issued before this moment are rejected; null = password never changed
     private Instant passwordChangedAt;
+
+    // Two-factor authentication (see V6 migration). totpSecret is AES-GCM encrypted (TotpSecretCipher).
+    private String totpSecret;
+    @Column(nullable = false)
+    private boolean totpEnabled;
+    private Long totpLastUsedStep;
 
     // Profile - all optional (see V5 migration). Strings, because none of them are ever used for maths.
     private String firstName;

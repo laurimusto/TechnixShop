@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import CartDrawer from "./cart-drawer";
 import { useShop } from "./providers";
+import SearchBox from "./search-box";
 import { btn, Logo } from "./ui";
 
 const iconProps = {
@@ -27,7 +27,6 @@ const userIcon = (
 );
 
 export default function Header() {
-  const router = useRouter();
   const { email, logout, cartCount } = useShop();
   const [accountOpen, setAccountOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
@@ -50,12 +49,6 @@ export default function Header() {
     };
   }, [accountOpen]);
 
-  function handleSearch(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const q = String(new FormData(e.currentTarget).get("q") ?? "").trim();
-    router.push(q ? `/?q=${encodeURIComponent(q)}` : "/");
-  }
-
   return (
     <header className="sticky top-0 z-30 border-b border-white/10 bg-chrome/85 backdrop-blur-lg">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:gap-5 sm:px-6">
@@ -63,26 +56,7 @@ export default function Header() {
           <Logo />
         </Link>
 
-        <form
-          onSubmit={handleSearch}
-          role="search"
-          className="relative order-last w-full sm:order-none sm:w-auto sm:flex-1"
-        >
-          <svg {...iconProps} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            name="q"
-            type="search"
-            aria-label="Search products"
-            placeholder="Search laptops, phones, brands…"
-            className="w-full rounded-full bg-white/5 py-2.5 pl-11 pr-4 text-sm text-slate-100 ring-1 ring-white/10 transition placeholder:text-muted focus:bg-white/10 focus:outline-none focus:ring-2 focus:ring-accent"
-          />
-          <button type="submit" className="sr-only">
-            Search
-          </button>
-        </form>
+        <SearchBox />
 
         <div className="ml-auto flex items-center gap-1 sm:ml-0">
           {email ? (
