@@ -118,24 +118,53 @@ export function OrDivider() {
   );
 }
 
-// Google's own button. On click Google hands us a signed ID token ("credential"),
-// which the backend verifies before issuing our own JWTs.
-export function GoogleButton({ onCredential }: { onCredential: (credential: string) => void }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Google keeps the callback from initialize(); a ref lets it always call the latest prop
+// Google's library keeps ONE configuration per page: initialize() is meant to run once, and every
+// extra call logs "initialize() is called multiple times" and replaces the previous callback.
+// So it runs once here, with a callback that forwards to whichever button is mounted right now.
+let googleInitialized = false;
+let activeGoogleReceiver: ((credential: string) => void) | null = null;
+
+type GoogleButtonOptions = Parameters<NonNullable<Window["google"]>["accounts"]["id"]["renderButton"]>[1];
+
+export function renderGoogleButton(container: HTMLElement, options: GoogleButtonOptions) {
+  const google = window.google;
+  if (!google) return;
+  if (!googleInitialized) {
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: (response) => activeGoogleReceiver?.(response.credential),
+    });
+    googleInitialized = true;
+  }
+  google.accounts.id.renderButton(container, options);
+}
+
+// Makes the calling component the receiver of Google credentials while it is mounted.
+export function useGoogleCredential(onCredential: (credential: string) => void) {
+  // a ref so the receiver always calls the latest prop without re-registering
   const callbackRef = useRef(onCredential);
   useEffect(() => {
     callbackRef.current = onCredential;
   });
+  useEffect(() => {
+    const receiver = (credential: string) => callbackRef.current(credential);
+    activeGoogleReceiver = receiver;
+    return () => {
+      // only clear it if a newer button hasn't already taken over
+      if (activeGoogleReceiver === receiver) activeGoogleReceiver = null;
+    };
+  }, []);
+}
+
+// Google's own button. On click Google hands us a signed ID token ("credential"),
+// which the backend verifies before issuing our own JWTs.
+export function GoogleButton({ onCredential }: { onCredential: (credential: string) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useGoogleCredential(onCredential);
 
   function render() {
-    const google = window.google;
-    if (!google || !containerRef.current) return;
-    google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: (response) => callbackRef.current(response.credential),
-    });
-    google.accounts.id.renderButton(containerRef.current, {
+    if (!containerRef.current) return;
+    renderGoogleButton(containerRef.current, {
       theme: "filled_black",
       size: "large",
       shape: "pill",

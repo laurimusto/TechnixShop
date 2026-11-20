@@ -14,6 +14,7 @@ import com.exception.PasswordTooShortException;
 import com.repository.RefreshTokenRepository;
 import com.repository.UserRepository;
 import com.security.AccessTokenDenylist;
+import com.security.TwoFactorChallengeStore;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +61,11 @@ class AuthServiceTest {
     private AccessTokenDenylist accessTokenDenylist;
     @Mock
     private PlatformTransactionManager transactionManager;
+    // 2FA paths are covered by TwoFactorIntegrationTest; here they're only constructor dependencies
+    @Mock
+    private TwoFactorChallengeStore twoFactorChallengeStore;
+    @Mock
+    private TwoFactorService twoFactorService;
 
     private AuthService authService;
 
@@ -67,7 +73,8 @@ class AuthServiceTest {
     // to mirror what application.properties would normally inject at runtime.
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, bCryptPasswordEncoder, refreshTokenRepository, accessTokenDenylist, transactionManager);
+        authService = new AuthService(userRepository, bCryptPasswordEncoder, refreshTokenRepository, accessTokenDenylist, transactionManager,
+                twoFactorChallengeStore, twoFactorService);
         ReflectionTestUtils.setField(authService, "jwtSecret", "unit-test-only-secret-key-that-is-long-enough-for-hs256");
         ReflectionTestUtils.setField(authService, "jwtExpirationMs", JWT_EXPIRATION_MS);
         ReflectionTestUtils.setField(authService, "refreshExpirationMs", REFRESH_EXPIRATION_MS);

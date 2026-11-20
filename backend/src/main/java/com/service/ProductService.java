@@ -3,18 +3,21 @@ package com.service;
 import com.dto.product.ProductResponseDTO;
 import com.dto.product.ProductResponseMapper;
 import com.dto.product.ProductSearchCriteriaDTO;
+import com.dto.product.SearchSuggestionDTO;
 import com.entity.Product;
 import com.entity.ProductImage;
 import com.repository.ProductImageRepository;
 import com.repository.ProductRepository;
 import com.specification.ProductSpecifications;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -26,6 +29,25 @@ public class ProductService {
     public ProductService(ProductRepository productRepository, ProductImageRepository productImageRepository) {
         this.productRepository = productRepository;
         this.productImageRepository = productImageRepository;
+    }
+
+    static final int SUGGESTION_LIMIT = 6;
+    static final int SUGGESTION_MIN_LENGTH = 2; // 1 letter matches half the catalog - useless and wasteful
+    static final int SUGGESTION_MAX_LENGTH = 100;
+
+    public List<SearchSuggestionDTO> suggest(String text) {
+        String q = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+        if (q.length() < SUGGESTION_MIN_LENGTH) {
+            return List.of();
+        }
+        // longer than any product name could match anyway; cap it so huge input costs nothing
+        if (q.length() > SUGGESTION_MAX_LENGTH) {
+            q = q.substring(0, SUGGESTION_MAX_LENGTH);
+        }
+        // same escaping as the /search name filter, so % and _ are plain text here too
+        String escaped = ProductSpecifications.escapeLike(q);
+        return productRepository.findSuggestions("%" + escaped + "%", escaped + "%", "% " + escaped + "%",
+                PageRequest.of(0, SUGGESTION_LIMIT));
     }
 
     public Page<ProductResponseDTO> search(ProductSearchCriteriaDTO criteria, Pageable pageable) {

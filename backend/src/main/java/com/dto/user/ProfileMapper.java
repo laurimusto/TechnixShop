@@ -22,7 +22,8 @@ public final class ProfileMapper {
     public static MeResponseDTO toMeResponse(User user) {
         ProfileDTO profile = new ProfileDTO(user.getFirstName(), user.getLastName(), user.getPhone(),
                 user.getStreet(), user.getPostalCode(), user.getCity(), user.getCountry());
-        return new MeResponseDTO(user.getEmail(), profile, user.getPassword() != null, user.hasDetailsForOrdering());
+        return new MeResponseDTO(user.getEmail(), profile, user.getPassword() != null, user.hasDetailsForOrdering(),
+                user.isTotpEnabled());
     }
 
     // trims, and turns "" / "   " into null so "not filled in" has exactly one representation

@@ -2,6 +2,7 @@ package com.security;
 
 
 import com.repository.UserRepository;
+import com.repository.UserSessionState;
 import com.service.AuthService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -19,6 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -63,12 +65,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             String userId = claims.getSubject();
 
-            // A password reset ends every session: tokens issued before the change are rejected,
+            // A deleted account ends every session: its tokens are still validly signed, but the user is gone.
+            Optional<UserSessionState> sessionState = userRepository.findSessionStateByUserId(Long.parseLong(userId));
+            if (sessionState.isEmpty()) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("Account no longer exists");
+                return;
+            }
+
+            // A password change or reset ends every session: tokens issued before the change are rejected,
             // even though their signature and expiry are still valid.
             Instant issuedAt = claims.getIssuedAt().toInstant();
-            boolean issuedBeforePasswordChange = userRepository.findPasswordChangedAtByUserId(Long.parseLong(userId))
-                    .map(issuedAt::isBefore)
-                    .orElse(false);
+            Instant passwordChangedAt = sessionState.get().passwordChangedAt();
+            boolean issuedBeforePasswordChange = passwordChangedAt != null && issuedAt.isBefore(passwordChangedAt);
             if (issuedBeforePasswordChange) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.getWriter().write("Session ended after password change");

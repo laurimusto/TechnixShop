@@ -9,6 +9,7 @@ import com.security.GoogleTokenVerifier;
 import com.security.GoogleTokenVerifier.GoogleUser;
 import com.service.AuthService;
 import com.service.PasswordResetService;
+import com.service.UserService;
 import com.exception.InvalidRefreshTokenException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -29,15 +30,18 @@ public class AuthController {
     private final CaptchaVerifier captchaVerifier;
     private final GoogleTokenVerifier googleTokenVerifier;
     private final PasswordResetService passwordResetService;
+    private final UserService userService;
 
     @Value("${refresh.expiration}")
     private long refreshExpirationMs;
 
-    public AuthController(AuthService authService, CaptchaVerifier captchaVerifier, GoogleTokenVerifier googleTokenVerifier, PasswordResetService passwordResetService) {
+    public AuthController(AuthService authService, CaptchaVerifier captchaVerifier, GoogleTokenVerifier googleTokenVerifier,
+                          PasswordResetService passwordResetService, UserService userService) {
         this.authService = authService;
         this.captchaVerifier = captchaVerifier;
         this.googleTokenVerifier = googleTokenVerifier;
         this.passwordResetService = passwordResetService;
+        this.userService = userService;
     }
 
     @PostMapping("/register")
@@ -56,36 +60,36 @@ public class AuthController {
                 .body(body);
     }
 
+    // Body is either AuthResponseDTO (signed in) or TwoFactorChallengeDTO (code needed) - hence <?>
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDTO> login(@RequestBody @Valid LoginRequestDTO loginRequestDTO) {
-        LoginResponseDTO result = authService.login(loginRequestDTO.email(), loginRequestDTO.password());
-
-        ResponseCookie cookie = buildRefreshCookie(result.refreshToken(), Duration.ofMillis(refreshExpirationMs));
-
-        AuthResponseDTO body = new AuthResponseDTO(result.token(), result.email(), result.id());
-
-        return ResponseEntity
-                .ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(body);
-
+    public ResponseEntity<?> login(@RequestBody @Valid LoginRequestDTO loginRequestDTO) {
+        return signInResponse(authService.login(loginRequestDTO.email(), loginRequestDTO.password()));
     }
 
     @PostMapping("/googlelogin")
-    public ResponseEntity<AuthResponseDTO> googleLogin(@RequestBody @Valid GoogleLoginRequestDTO request) {
+    public ResponseEntity<?> googleLogin(@RequestBody @Valid GoogleLoginRequestDTO request) {
         GoogleUser googleUser = googleTokenVerifier.verify(request.idToken())
                 .orElseThrow(() -> new InvalidCredentialsException("Invalid Google sign-in"));
 
-        LoginResponseDTO result = authService.googleLogin(googleUser);
+        return signInResponse(authService.googleLogin(googleUser));
+    }
 
+    // second login step for accounts with 2FA
+    @PostMapping("/login/2fa")
+    public ResponseEntity<?> loginTwoFactor(@RequestBody @Valid TwoFactorLoginRequestDTO request) {
+        return signInResponse(authService.completeTwoFactorLogin(request.challengeToken(), request.code()));
+    }
+
+    private ResponseEntity<?> signInResponse(LoginResponseDTO result) {
+        if (result.needsTwoFactor()) {
+            // deliberately no Set-Cookie: no refresh token exists yet
+            return ResponseEntity.ok(new TwoFactorChallengeDTO(true, result.twoFactorChallenge()));
+        }
         ResponseCookie cookie = buildRefreshCookie(result.refreshToken(), Duration.ofMillis(refreshExpirationMs));
-
-        AuthResponseDTO body = new AuthResponseDTO(result.token(), result.email(), result.id());
-
         return ResponseEntity
                 .ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(body);
+                .body(new AuthResponseDTO(result.token(), result.email(), result.id()));
     }
 
     @PostMapping("/forgot-password")
@@ -100,6 +104,14 @@ public class AuthController {
     public ResponseEntity<Void> resetPassword(@RequestBody @Valid ResetPasswordRequestDTO request) {
         passwordResetService.resetPassword(request);
         // 204: it worked, nothing to send back. Failures are thrown and turned into 400s by GlobalExceptionHandler.
+        return ResponseEntity.noContent().build();
+    }
+
+    // Public like /reset-password: the link may be opened in a browser where the user isn't logged in.
+    // The token itself identifies the user.
+    @PostMapping("/confirm-email")
+    public ResponseEntity<Void> confirmEmail(@RequestBody @Valid ConfirmEmailRequestDTO request) {
+        userService.confirmEmailChange(request.token());
         return ResponseEntity.noContent().build();
     }
 

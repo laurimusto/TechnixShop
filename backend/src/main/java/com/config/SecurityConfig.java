@@ -46,10 +46,10 @@ public class SecurityConfig {
                         // sign-in flows: the caller has no access token yet
                         // (/refresh uses the HttpOnly cookie, /logout must work even with an expired token)
                         .requestMatchers(HttpMethod.POST,
-                                "/register", "/login", "/googlelogin", "/refresh", "/logout",
-                                "/forgot-password", "/reset-password").permitAll()
+                                "/register", "/login", "/login/2fa", "/googlelogin", "/refresh", "/logout",
+                                "/forgot-password", "/reset-password", "/confirm-email").permitAll()
                         // catalog browsing is public
-                        .requestMatchers(HttpMethod.GET, "/categories", "/search").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/categories", "/search", "/search/suggestions").permitAll()
                         // Spring forwards unhandled errors here; blocking it would turn every error into 401
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())

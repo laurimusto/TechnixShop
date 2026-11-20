@@ -3,10 +3,10 @@
 import Link from "next/link";
 import Script from "next/script";
 import { useRef, useState } from "react";
+import { renderGoogleButton, useGoogleCredential } from "../auth-widgets";
 import { API_BASE, useShop } from "../providers";
 
 const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? "";
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
 type AuthResponse = { token: string; email: string; id: number };
 // window.google / window.grecaptcha types are declared in ../auth-widgets.tsx
@@ -94,14 +94,9 @@ export default function ApiTestConsole() {
     }
   }
 
-  function renderGoogleButton() {
-    const google = window.google;
-    if (!google || !googleButtonRef.current) return;
-    google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: handleGoogleCredential,
-    });
-    google.accounts.id.renderButton(googleButtonRef.current, {
+  function renderGoogleSignIn() {
+    if (!googleButtonRef.current) return;
+    renderGoogleButton(googleButtonRef.current, {
       theme: "outline",
       size: "medium",
       text: "signin_with",
@@ -125,6 +120,8 @@ export default function ApiTestConsole() {
       setAuthMessage(`Error ${res.status}: ${data.message ?? JSON.stringify(data)}`);
     }
   }
+  // shares the page-wide Google setup with the other Google buttons (initialize() runs only once)
+  useGoogleCredential((credential) => handleGoogleCredential({ credential }));
 
   async function handleLogout() {
     try {
@@ -175,7 +172,7 @@ export default function ApiTestConsole() {
         src="https://www.google.com/recaptcha/api.js?render=explicit"
         onReady={renderCaptcha}
       />
-      <Script src="https://accounts.google.com/gsi/client" onReady={renderGoogleButton} />
+      <Script src="https://accounts.google.com/gsi/client" onReady={renderGoogleSignIn} />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">API test console</h1>
         <Link href="/" className="border px-3 py-1 text-sm">

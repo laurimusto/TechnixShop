@@ -55,6 +55,10 @@ type ShopContextValue = {
     profile?: Profile,
   ) => Promise<string | null>;
   googleLogin: (idToken: string) => Promise<string | null>;
+  // true after login/googleLogin succeeded for an account with 2FA: a code is still needed
+  twoFactorPending: boolean;
+  verifyTwoFactor: (code: string) => Promise<string | null>;
+  cancelTwoFactor: () => void;
   logout: () => Promise<void>;
   // cart is in memory for now; Project 2 moves it to the backend
   cart: CartItem[];
@@ -74,7 +78,7 @@ const ShopContext = createContext<ShopContextValue | null>(null);
 // Refresh tokens are single-use: two parallel /refresh calls with the same cookie would look
 // like token reuse and revoke the whole session, so concurrent callers share one request.
 let refreshInFlight: Promise<AuthResponse | null> | null = null;
-function refreshSession(): Promise<AuthResponse | null> {
+export function refreshSession(): Promise<AuthResponse | null> {
   refreshInFlight ??= fetch(`${API_BASE}/refresh`, { method: "POST", credentials: "include" })
     .then((res) => (res.ok ? (res.json() as Promise<AuthResponse>) : null))
     .catch(() => null)
@@ -127,8 +131,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
     [session, setSession],
   );
 
-  // /login, /register and /googlelogin all answer with the same AuthResponse, so they share one
-  // request function. credentials: "include" lets the browser store the HttpOnly refresh cookie.
+  // Between the password step and the code step of a 2FA login. Memory only, like the access token:
+  // it is worth half a login, so it must not survive in storage.
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState<string | null>(null);
+
+  // /login, /register, /googlelogin and /login/2fa all answer with the same AuthResponse, so they share
+  // one request function. credentials: "include" lets the browser store the HttpOnly refresh cookie.
   const authenticate = useCallback(
     async (path: string, body: object) => {
       try {
@@ -139,7 +147,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
           body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
+        // 401 on /login/2fa = the challenge expired: back to the password step
+        if (res.status === 401) setTwoFactorChallenge(null);
         if (!res.ok) return (data.message as string | undefined) ?? `Request failed (${res.status})`;
+        if (data.twoFactorRequired) {
+          // password was right, but no session yet - the login page now asks for the code
+          setTwoFactorChallenge(data.challengeToken);
+          return null;
+        }
+        setTwoFactorChallenge(null);
         setSession(data.token, data.email);
         return null;
       } catch {
@@ -148,6 +164,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
     },
     [setSession],
   );
+
+  const verifyTwoFactor = useCallback(
+    (code: string) => authenticate("/login/2fa", { challengeToken: twoFactorChallenge, code }),
+    [authenticate, twoFactorChallenge],
+  );
+  const cancelTwoFactor = useCallback(() => setTwoFactorChallenge(null), []);
 
   const login = useCallback(
     (email: string, password: string) => authenticate("/login", { email, password }),
@@ -248,6 +270,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         login,
         register,
         googleLogin,
+        twoFactorPending: twoFactorChallenge !== null,
+        verifyTwoFactor,
+        cancelTwoFactor,
         logout,
         cart,
         cartCount,

@@ -9,6 +9,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 
 public class ProductSpecifications {
     //method for filtering categories.
@@ -23,10 +24,20 @@ public class ProductSpecifications {
                 criteriaBuilder.equal(root.get("brand").get("brandId"), brandId);
     }
 
+    // In LIKE, % (any text) and _ (any one character) are wildcards. Escaping them, and the escape
+    // character itself, makes the user's text match literally: "50%" means "50%", not "50 + anything".
+    // The backslash goes first, otherwise it would also double the backslashes added for % and _.
+    public static final char LIKE_ESCAPE = '\\';
+
+    public static String escapeLike(String text) {
+        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
     //case-insensitive substring match on product name, for the search bar
     public static Specification<Product> nameContains(String name) {
+        String pattern = "%" + escapeLike(name.toLowerCase(Locale.ROOT)) + "%";
         return (root, query, criteriaBuilder) ->
-                criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), "%" + name.toLowerCase() + "%");
+                criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), pattern, LIKE_ESCAPE);
     }
 
     //this is for filtering prices and weight between x AND y

@@ -9,7 +9,7 @@ import { btn } from "../ui";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { email, login, googleLogin } = useShop();
+  const { email, login, googleLogin, twoFactorPending } = useShop();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -18,6 +18,9 @@ export default function LoginPage() {
   useEffect(() => {
     if (email) router.replace("/");
   }, [email, router]);
+
+  // password was right but the account has 2FA: second step on the same page
+  if (twoFactorPending) return <TwoFactorStep />;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -57,6 +60,50 @@ export default function LoginPage() {
           Register
         </Link>
       </p>
+    </AuthCard>
+  );
+}
+
+function TwoFactorStep() {
+  const { verifyTwoFactor, cancelTwoFactor } = useShop();
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const code = String(new FormData(e.currentTarget).get("code")).replace(/\s/g, "");
+    setSubmitting(true);
+    setError((await verifyTwoFactor(code)) ?? "");
+    setSubmitting(false);
+  }
+
+  return (
+    <AuthCard title="Two-factor authentication" subtitle="Enter the 6-digit code from your authenticator app.">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {/* numeric keyboard on phones; "one-time-code" lets browsers/OS offer the code */}
+        <Field
+          label="Code"
+          name="code"
+          required
+          autoFocus
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="\d{6}"
+          maxLength={6}
+          title="6 digits"
+        />
+        <FormError message={error} />
+        <button type="submit" disabled={submitting} className={`${btn.primary} px-4 py-2.5`}>
+          {submitting ? "Checking…" : "Verify"}
+        </button>
+        <button
+          type="button"
+          onClick={cancelTwoFactor}
+          className="text-sm text-muted underline-offset-4 hover:text-white hover:underline"
+        >
+          Back to log in
+        </button>
+      </form>
     </AuthCard>
   );
 }
