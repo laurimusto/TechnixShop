@@ -2,7 +2,6 @@ package com.config;
 
 
 import com.security.JwtAuthenticationFilter;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,11 +24,14 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Autowired
-    private JwtAuthenticationFilter jwtFilter;
+    private final JwtAuthenticationFilter jwtFilter;
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
+        this.jwtFilter = jwtFilter;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -50,6 +52,8 @@ public class SecurityConfig {
                                 "/forgot-password", "/reset-password", "/confirm-email").permitAll()
                         // catalog browsing is public
                         .requestMatchers(HttpMethod.GET, "/categories", "/search", "/search/suggestions").permitAll()
+                        // Docker health check and monitoring; only health is exposed (application.properties)
+                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
                         // Spring forwards unhandled errors here; blocking it would turn every error into 401
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
