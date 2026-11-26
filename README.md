@@ -18,7 +18,7 @@ All of it runs in Docker.
 ## Start it
 
 ```bash
-cd i-love-shopping1
+cd i-love-shopping2
 cp .env.example .env          # Windows PowerShell: copy .env.example .env
 docker compose up --build
 ```
@@ -146,7 +146,6 @@ The details are in [tests.md](tests.md).
 - Relevance sorting (left out on purpose: results are sorted by price, rating or weight)
 - Rating filter
 - Product image upload (images are seeded URLs)
-- API docs (OpenAPI)
 
 ## Disclaimer
 

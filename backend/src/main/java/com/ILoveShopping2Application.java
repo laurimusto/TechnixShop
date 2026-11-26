@@ -11,7 +11,7 @@ import java.util.TimeZone;
 
 @EnableAsync
 @SpringBootApplication
-public class ILoveShopping1Application {
+public class ILoveShopping2Application {
 
     public static void main(String[] args) {
 
@@ -25,7 +25,7 @@ public class ILoveShopping1Application {
                 System.setProperty(e.getKey(), e.getValue())
         );
 
-        SpringApplication.run(ILoveShopping1Application.class, args);
+        SpringApplication.run(ILoveShopping2Application.class, args);
     }
 
     // "What time is it?" as an injectable dependency (@SpringBootApplication is also a @Configuration).
