@@ -11,6 +11,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.rabbitmq.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.ObjectMapper;
 
@@ -32,9 +33,12 @@ import static org.mockito.Mockito.when;
 public abstract class IntegrationTestBase {
 
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
+    // same image as docker compose, so tests run against the broker version we ship with
+    static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management");
 
     static {
         POSTGRES.start();
+        RABBIT.start();
     }
 
     // .env loading only happens in ILoveShopping2Application.main(), which @SpringBootTest
@@ -56,6 +60,13 @@ public abstract class IntegrationTestBase {
         registry.add("recaptcha.secret", () -> "test");
         registry.add("google.client-id", () -> "test-client-id");
         registry.add("totp.encryption-key", () -> "integration-test-only-totp-encryption-key");
+        registry.add("spring.rabbitmq.host", RABBIT::getHost);
+        registry.add("spring.rabbitmq.port", RABBIT::getAmqpPort);
+        registry.add("spring.rabbitmq.username", RABBIT::getAdminUsername);
+        registry.add("spring.rabbitmq.password", RABBIT::getAdminPassword);
+        // fake values: no test talks to real Stripe (the gateway is mocked or WireMock-stubbed)
+        registry.add("stripe.secret-key", () -> "sk_test_integration_dummy");
+        registry.add("stripe.webhook-secret", () -> "whsec_integration_test_secret");
     }
 
     @Autowired

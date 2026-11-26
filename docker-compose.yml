@@ -70,6 +70,8 @@ services:
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
       RABBITMQ_HOST: rabbitmq
+      # JSON (ECS) log lines, one per event: easy to search for an order id or event id
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
     ports:
       - "8080:8080"
     depends_on:
