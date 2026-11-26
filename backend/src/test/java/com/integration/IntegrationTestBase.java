@@ -10,7 +10,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.ObjectMapper;
 
@@ -31,13 +31,13 @@ import static org.mockito.Mockito.when;
 @Testcontainers
 public abstract class IntegrationTestBase {
 
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     static {
         POSTGRES.start();
     }
 
-    // .env loading only happens in ILoveShopping1Application.main(), which @SpringBootTest
+    // .env loading only happens in ILoveShopping2Application.main(), which @SpringBootTest
     // never calls - so every ${...} placeholder application.properties relies on is supplied
     // here directly instead, bypassing the env-var indirection entirely.
     @DynamicPropertySource
