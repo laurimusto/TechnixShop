@@ -28,6 +28,38 @@ services:
       - "1025:1025" # SMTP, the backend sends mail here
       - "8025:8025" # web UI to view caught emails
 
+  rabbitmq:
+    image: rabbitmq:4-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "5672:5672"   # AMQP, the backend connects here
+      - "15672:15672" # management UI: queues, messages, the DLQ
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # Forwards Stripe sandbox webhooks to the backend. On start it prints the signing secret
+  # (whsec_...): run "docker compose logs stripe-cli" and put it in STRIPE_WEBHOOK_SECRET.
+  stripe-cli:
+    image: stripe/stripe-cli:latest
+    restart: unless-stopped
+    environment:
+      # the CLI reads its key from here, so "docker compose exec stripe-cli stripe ..." works too
+      STRIPE_API_KEY: ${STRIPE_SECRET_KEY}
+    command: >
+      listen
+      --forward-to http://backend:8080/payments/webhook
+      --events payment_intent.succeeded,payment_intent.payment_failed,payment_intent.canceled,charge.refunded,refund.updated,refund.failed
+    depends_on:
+      - backend
+
   backend:
     build: ./backend
     restart: unless-stopped
@@ -37,6 +69,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/technix
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
+      RABBITMQ_HOST: rabbitmq
     ports:
       - "8080:8080"
     depends_on:
@@ -44,6 +77,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   frontend:
     build:
@@ -51,6 +86,7 @@ services:
       args:
         NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -59,3 +95,4 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:
